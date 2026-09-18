@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "../db";
 import type { HelpRequest } from "@prisma/client";
 
 export async function createHelpRequest(

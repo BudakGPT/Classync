@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "../db";
 import type { Answer } from "@prisma/client";
 import { z } from "zod";
 

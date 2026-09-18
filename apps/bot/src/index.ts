@@ -1,5 +1,11 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits, MessageFlags, type Interaction } from "discord.js";
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+  MessageFlags,
+  type Interaction,
+} from "discord.js";
 import setup from "./commands/setup.js";
 import ta from "./commands/ta.js";
 import tasks from "./commands/tasks.js";
@@ -8,9 +14,22 @@ import { handleReminderInteraction, handleTaskInteraction } from "./interactions
 import { handleTaAutocomplete } from "./interactions/ta.js";
 import { startDeliverJob } from "./jobs/deliver.js";
 import { startReminderJob } from "./jobs/reminders.js";
+import { handleTopicRoomMessage } from "./topicRooms.js";
 
-const commands = new Map([[setup.data.name, setup], [tasks.data.name, tasks], [ta.data.name, ta]]);
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const commands = new Map([
+  [setup.data.name, setup],
+  [tasks.data.name, tasks],
+  [ta.data.name, ta],
+]);
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages,
+  ],
+});
 
 async function reportInteractionError(interaction: Interaction): Promise<void> {
   if (!interaction.isRepliable()) return;
@@ -47,11 +66,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleReminderInteraction(interaction);
       return;
     }
-    if (interaction.isStringSelectMenu() || interaction.isModalSubmit()) await handleTaskInteraction(interaction);
+    if (interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+      await handleTaskInteraction(interaction);
+    }
   } catch (error) {
     console.error("[interaction] Error", error);
     await reportInteractionError(interaction);
   }
+});
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+  await handleTopicRoomMessage(client, message).catch((err) => {
+    console.error("[messageCreate] Error handling room message", err);
+  });
 });
 
 client.on(Events.Error, (error) => console.error("[discord] Client error", error));
