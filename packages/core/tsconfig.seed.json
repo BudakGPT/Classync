@@ -1,0 +1,11 @@
+{
+  // seed.ts is run by tsx, never emitted, so it cannot live under the build
+  // tsconfig's rootDir ("./src"). Typechecked separately so it stays covered.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["prisma/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
