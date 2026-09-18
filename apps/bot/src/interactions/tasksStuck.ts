@@ -81,6 +81,12 @@ export async function handleHelpButton(interaction: ButtonInteraction, action: s
   }
   const concept = conceptId ? await getConceptById(conceptId) : null;
   if (!concept || concept.itemId !== itemId) return void (await interaction.followUp({ content: "That concept is unavailable.", flags: MessageFlags.Ephemeral }));
-  await createHelpRequest(concept.id, ctx.student.id);
+  await createHelpRequest(concept.id, ctx.student.id, await requesterDisplayName(interaction));
   await interaction.editReply(await taskDetailScreen(ctx.item.id, ctx.student, "Your TA-help request was sent."));
+}
+
+/** Guild display name at confirmation time; falls back to the global name when tapped from a DM. */
+async function requesterDisplayName(interaction: ButtonInteraction): Promise<string> {
+  const member = interaction.guild ? await interaction.guild.members.fetch(interaction.user.id).catch(() => null) : null;
+  return member?.displayName ?? interaction.user.globalName ?? interaction.user.username;
 }

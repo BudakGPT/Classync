@@ -1,7 +1,9 @@
 import { MessageFlags, type ButtonInteraction } from "discord.js";
+import { setStatus } from "@classync/core";
 import { conceptPickerScreen } from "../ui/tasks.js";
 import { contextForItem } from "./taskContext.js";
 
+/** Buttons on the reminder DM (PRD B5). Done writes the private status; Still stuck opens the concept picker. */
 export async function handleReminderInteraction(interaction: ButtonInteraction): Promise<boolean> {
   if (!interaction.customId.startsWith("reminder:")) return false;
   await interaction.deferUpdate();
@@ -13,7 +15,8 @@ export async function handleReminderInteraction(interaction: ButtonInteraction):
     return true;
   }
   if (action === "done") {
-    await interaction.editReply({ content: "The Done status is no longer used. Use **Still stuck** if you need help.", components: [] });
+    await setStatus(itemId, context.student.id, "DONE");
+    await interaction.editReply({ content: `✅ **${context.item.title}** marked done. No more reminders for this task.`, components: [] });
   } else if (action === "stuck") {
     await interaction.editReply(await conceptPickerScreen(itemId));
   }

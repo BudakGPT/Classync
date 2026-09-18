@@ -62,7 +62,8 @@ export async function deliverPending(client: Client): Promise<void> {
           });
         pinnedMessageId = sent.pinnedMessageId;
         threadMessageId = sent.messageId;
-      } else if (!concept.topicRoom?.channelId) {
+      } else {
+        // No open room (never created, or closed): pin in the announcement channel (PRD B3).
         pinnedMessageId = await sendPinnedAnswer(client, item.guild.announcementChannelId, item.guild.discordGuildId, answerText)
           .catch((error: unknown) => {
             console.warn("[deliver] Could not post pinned answer", error);

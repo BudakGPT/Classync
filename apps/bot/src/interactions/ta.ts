@@ -65,7 +65,7 @@ async function showQueue(interaction: ChatInputCommandInteraction): Promise<void
       value: [
         `**${entry.item.title}**`,
         entry.requesters.length > 0
-          ? `Requesters: ${(await Promise.all(entry.requesters.map((req) => requesterName(interaction, req.discordUserId)))).join(", ")}`
+          ? `Requesters: ${(await Promise.all(entry.requesters.map(async (req) => req.displayName ?? await requesterName(interaction, req.discordUserId)))).join(", ")}`
           : "No private help requests.",
         roomInfo,
         `ID: \`${entry.conceptId}\``,

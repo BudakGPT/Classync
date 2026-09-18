@@ -18,6 +18,8 @@ import {
   revokeAndDelete,
 } from "@classync/core";
 import { conceptPickerScreen, consentScreen, taskDetailScreen, taskListScreen } from "../ui/tasks.js";
+import { setStatus } from "@classync/core";
+import { webUrl } from "../config.js";
 import { revokeStudentRoomAccess } from "../topicRooms.js";
 import { handleRoomButton, handleRoomModal, handleRoomSelect } from "./rooms.js";
 import { contextForItem, type TaskComponent } from "./taskContext.js";
@@ -93,7 +95,7 @@ async function handlePanel(interaction: ButtonInteraction): Promise<void> {
     }
     const queue = await getTaQueue(guild.id);
     await interaction.editReply({
-      content: `🧑‍🏫 **TA Dashboard & Queue**\nAntrean saat ini: **${queue.length} topik**.\nGunakan command \`/ta queue\` untuk melihat antrean lengkap di Discord, atau [Buka Web Dashboard](http://localhost:3000/g/${guild.id}).`,
+      content: `🧑‍🏫 **TA Dashboard & Queue**\nAntrean saat ini: **${queue.length} topik**.\nGunakan command \`/ta queue\` untuk melihat antrean lengkap di Discord, atau [Buka Web Dashboard](${webUrl()}/g/${guild.id}).`,
     });
     return;
   }
@@ -115,6 +117,11 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
   if (!context) return void await interaction.followUp({ content: "Open `/tasks` in the class server first.", flags: MessageFlags.Ephemeral });
   if (action === "back") await interaction.editReply(await taskListScreen(context.item.guildId, context.student));
   else if (action === "stuck") await interaction.editReply(await conceptPickerScreen(itemId));
+  else if (action === "progress" || action === "done") {
+    // PRD B2: private status only; nothing is revealed to anyone else.
+    await setStatus(itemId, context.student.id, action === "done" ? "DONE" : "IN_PROGRESS");
+    await interaction.editReply(await taskDetailScreen(itemId, context.student, action === "done" ? "✅ Marked done. Reminders for this task stop." : "🔵 Marked in progress."));
+  }
 }
 
 async function handleSelect(interaction: StringSelectMenuInteraction): Promise<void> {

@@ -20,6 +20,7 @@ import {
   transferGuildOwnership,
 } from "@classync/core";
 import { createQuickPanelEmbed, setupAcademicServer } from "../academicSetup.js";
+import { webUrl } from "../config.js";
 
 async function canManageSetup(interaction: ChatInputCommandInteraction | ModalSubmitInteraction): Promise<boolean> {
   if (!interaction.guildId || !interaction.guild) return false;
@@ -67,7 +68,7 @@ function buildSuccessEmbed(guildId: string, announceChannelId: string, courseNam
       },
       {
         name: "💻 Dashboard TA Web",
-        value: `[Buka Web Dashboard](http://localhost:3000/g/${guildId})`,
+        value: `[Buka Web Dashboard](${webUrl()}/g/${guildId})`,
         inline: true,
       },
       {

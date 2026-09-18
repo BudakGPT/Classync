@@ -82,6 +82,7 @@ export async function taskListScreen(guildId: string, student: StudentRef) {
   };
 }
 
+/** Task detail: private status buttons on the first row, escalation paths on the second (PRD B2). */
 export async function taskDetailScreen(itemId: string, student: StudentRef, notice?: string) {
   const item = await getItemById(itemId);
   if (!item) return { content: "That task no longer exists.", components: [] };
@@ -89,9 +90,13 @@ export async function taskDetailScreen(itemId: string, student: StudentRef, noti
   const state = status?.state ?? "NONE";
   const due = item.dueAt ? `<t:${Math.floor(item.dueAt.getTime() / 1000)}:F>` : "No due date";
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const statusRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:progress:${item.id}`).setLabel("In progress").setStyle(ButtonStyle.Primary).setDisabled(state === "IN_PROGRESS"),
+    new ButtonBuilder().setCustomId(`task:done:${item.id}`).setLabel("Done").setStyle(ButtonStyle.Success).setDisabled(state === "DONE"),
     new ButtonBuilder().setCustomId(`task:stuck:${item.id}`).setLabel("Stuck").setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`task:room:${item.id}`).setLabel("Ask / Join Room").setStyle(ButtonStyle.Primary),
+  );
+  const escalationRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:room:${item.id}`).setLabel("Ask / Join Room").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`task:help:${item.id}`).setLabel("Request TA help").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`task:back:${item.id}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
   );
@@ -103,7 +108,7 @@ export async function taskDetailScreen(itemId: string, student: StudentRef, noti
       `**Your private status:** ${statusEmoji[state] ?? "⚪"} ${state}`,
       notice ? `\n${notice}` : "",
     ].join("\n"),
-    components: [actionRow],
+    components: [statusRow, escalationRow],
   };
 }
 
@@ -162,11 +167,14 @@ export function roomConfirmScreen(itemId: string, itemTitle: string, conceptId: 
   };
 }
 
-/** Threshold message after saving Stuck: count only when >= 5 reporters, plus any stored TA answer. */
+/**
+ * Threshold message after saving Stuck: the honest total ("N students flagged this") only when
+ * >= 5 reporters (privacy floor), plus any stored TA answer. Wording per DEMO_SCRIPT §5.
+ */
 export async function stuckNotice(conceptId: string): Promise<string> {
   const count = await getStuckCount(conceptId);
   const answer = await getLatestAnswerForConcept(conceptId);
-  const countLine = count === null ? "Saved privately." : `🔴 **${count} others flagged this.**`;
+  const countLine = count === null ? "Saved privately." : `🔴 **${count} students flagged this.** You are not alone.`;
   const answerLine = answer ? `\n\n**A TA already answered this topic:**\n${truncate(answer.body, 1_200)}` : "";
   return `${countLine} You can click **Ask / Join Room** to enter the discussion room.${answerLine}`;
 }
