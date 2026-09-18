@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpenText, LayoutDashboard, ListChecks, type LucideIcon } from "lucide-react";
+import { BookOpenText, IdCard, LayoutDashboard, ListChecks, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Tab {
@@ -24,6 +24,7 @@ export function GuildTabs({ guildId, openRequests }: { guildId: string; openRequ
     { href: root, label: "Overview", icon: LayoutDashboard, match: ["", "/concepts"], count: openRequests },
     { href: `${root}/tasks`, label: "Tasks", icon: ListChecks, match: ["/tasks", "/items"] },
     { href: `${root}/answers`, label: "Knowledge base", icon: BookOpenText, match: ["/answers"] },
+    { href: `${root}/roster`, label: "Roster", icon: IdCard, match: ["/roster"] },
   ];
 
   return (
