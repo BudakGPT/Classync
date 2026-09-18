@@ -30,7 +30,7 @@ export function createQuickPanelEmbed(courseName: string, courseCode: string) {
       `Selamat datang di ruang belajar terintegrasi untuk kelas **${courseCode}**.\n\n` +
       `Gunakan tombol interaktif di bawah untuk mengakses tugas, berdiskusi di private room, atau bantuan asisten dosen.`
     )
-    .setColor(0x5865f2)
+    .setColor(0x136afb)
     .addFields(
       { name: "📋 Daftar Tugas Saya", value: "Buka checklist tugas dan kelola status pengerjaan secara privat." },
       { name: "🙋 Tanya / Diskusi Konsep", value: "Masuk ke private concept room bersama rekan sekelas & TA." },

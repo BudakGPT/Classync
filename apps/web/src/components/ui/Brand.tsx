@@ -1,29 +1,37 @@
+import Image from "next/image";
 import type { SVGProps } from "react";
 import { cn } from "@/lib/utils";
 
-/** Classync mark: an open "C" orbit with a synced dot. */
-export function ClassyncMark({ size = 32, className }: { size?: number; className?: string }) {
+/** Classync mark: official mark icon. */
+export function ClassyncMark({ size = 36, className }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" className={className} aria-hidden>
-      <defs>
-        <linearGradient id="cs-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#7472e8" />
-          <stop offset="0.55" stopColor="#5b57d6" />
-          <stop offset="1" stopColor="#7c4dd9" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill="url(#cs-g)" />
-      <path d="M21.6 11.1a6.6 6.6 0 1 0 0 9.8" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-      <circle cx="22.6" cy="16" r="2.2" fill="#7ff0d9" />
-    </svg>
+    <Image
+      src="/mark.png"
+      alt="Classync"
+      width={size}
+      height={size}
+      style={{ width: `${size}px`, height: `${size}px` }}
+      className={cn("shrink-0 object-contain drop-shadow-sm", className)}
+      priority
+    />
   );
 }
 
-export function Logo({ className, size = 32 }: { className?: string; size?: number }) {
+/** Official horizontal Classync logo. */
+export function Logo({ className, size = 36 }: { className?: string; size?: number }) {
+  const h = size;
+  const w = Math.round(h * 3);
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <ClassyncMark size={size} className="shrink-0 drop-shadow-[0_4px_10px_rgb(91_87_214/0.35)]" />
-      <span className="text-[17px] font-extrabold tracking-tight text-ink">Classync</span>
+    <span className={cn("inline-flex items-center", className)}>
+      <Image
+        src="/logo.png"
+        alt="Classync"
+        width={w}
+        height={h}
+        style={{ height: `${h}px`, width: "auto" }}
+        className="object-contain"
+        priority
+      />
     </span>
   );
 }

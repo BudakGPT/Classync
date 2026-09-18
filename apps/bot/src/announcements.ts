@@ -39,7 +39,7 @@ export function createTaskAnnouncementEmbed(item: { title: string; kind: string;
       `Tugas baru telah ditambahkan ke sistem akademik Classync.\n\n` +
       `Silakan periksa detail dan kelola status pengerjaan Anda melalui tombol di bawah secara privat.`
     )
-    .setColor(0x5865f2)
+    .setColor(0x136afb)
     .addFields(
       { name: "🏷️ Jenis Tugas", value: kindLabel, inline: true },
       { name: "⏰ Batas Waktu (Deadline)", value: due, inline: true },
@@ -66,7 +66,7 @@ export function createAllTasksAnnouncementEmbed(guildName: string, items: Array<
       `Berikut adalah rangkuman seluruh tugas dan aktivitas akademik yang **saat ini aktif** dan belum melewati deadline.\n\n` +
       `Kelola progres belajar Anda secara privat melalui tombol di bawah.`
     )
-    .setColor(0x3498db)
+    .setColor(0x60a4fc)
     .setFooter({ text: `Total ${items.length} tugas aktif · Classync Task Tracker` })
     .setTimestamp();
 

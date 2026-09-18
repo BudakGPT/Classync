@@ -22,7 +22,7 @@ export function createVerificationEmbed(guildName: string) {
       `• Nickname Discord Anda di server ini akan disesuaikan menjadi format \`NPM - Nama Lengkap\`.\n\n` +
       `Silakan klik tombol di bawah untuk memulai verifikasi.`
     )
-    .setColor(0x1abc9c)
+    .setColor(0x136afb)
     .setFooter({ text: "Classync Identity Verification Gate · 1 Akun = 1 NPM" });
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
