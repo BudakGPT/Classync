@@ -1,6 +1,6 @@
-# Classync v2 — Clustered Topic Rooms (Draft Discussion PRD)
+# Classync v2 — Clustered Topic Rooms (Superseded Draft)
 
-**Status:** discussion draft only. This document does not authorize implementation or replace `docs/PRD.md` yet.
+**Status:** Superseded by `docs/PRIVATE-ROOMS-IMPLEMENTATION-PLAN.md` (Private Concept Rooms). Refer to `docs/PRIVATE-ROOMS-IMPLEMENTATION-PLAN.md` and `docs/PRD-FRONTEND.md` for current system architecture.
 
 ## 1. Product direction
 

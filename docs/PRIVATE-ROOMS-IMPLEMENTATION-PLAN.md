@@ -1,12 +1,15 @@
 # Classync — Private Concept Rooms: Implementation Plan
 
-**Status:** approved design direction; no code implementation in this document.
+**Status:** Implemented & Verified (18 Sep 2026).
 
-## Decision and privacy change
+## Decision and privacy model (Finalized)
 
-Replace the anonymous, voluntary public-forum room model with one **private room per `Item + Concept`**. The first student who explicitly sends a question creates the room. Later students who report the same concept may be added to that room automatically.
-
-This is not anonymous: all members of a room can see one another's Discord identity and messages. Consent text must explicitly say this before a student sends a question or is added to a matching room. A private `Stuck` report by itself should remain private unless the product explicitly chooses automatic enrolment.
+Replaced the anonymous public-forum model with **Private Concept Rooms** organized under per-assignment Discord categories:
+1. **Voluntary Direct Enrolment:** Students can click **"Ask / Join Room"** directly from any task (no need to be marked `Stuck` first). The first student to enter a concept creates the private room; subsequent students enter the existing room upon accepting the privacy disclosure.
+2. **Per-Assignment Category:** Every task gets its own Discord category (e.g., `📁 [Assignment Title]`), and concept rooms are created as private text channels within it (e.g., `#help-docker-install`).
+3. **TA Activity Alerts via DM:** Student questions trigger debounced (2-minute) private DMs to registered TAs (`guild.taUserIds`) with message snippets and Discord jump links.
+4. **Rooms Remain Open After TA Answer:** TA answers are posted and pinned in the room channel via the delivery worker, leaving the room open for student discussion.
+5. **Due-Date Gated Closure & Cleanup:** TAs can close rooms or perform bulk cleanup with `/ta close-room` and `/ta close-task-rooms` once the assignment due date has passed.
 
 ## 1. Data model
 
