@@ -20,7 +20,7 @@ export async function saveRosterEntries(
   let updated = 0;
 
   for (const item of entries) {
-    const cleanNpm = String(item.npm).trim().replace(/\s+/g, "");
+    const cleanNpm = String(item.npm).trim().replace(/\s+/g, "").toUpperCase();
     if (!cleanNpm) continue;
     const cleanName = String(item.name).trim();
     const role = item.role === "TA" ? RosterRole.TA : RosterRole.STUDENT;
@@ -84,7 +84,7 @@ export async function verifyRosterMember(
   const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
   if (!guild) return { success: false, reason: "NOT_FOUND" };
 
-  const cleanNpm = npm.trim().replace(/\s+/g, "");
+  const cleanNpm = npm.trim().replace(/\s+/g, "").toUpperCase();
   const entry = await prisma.academicRoster.findUnique({
     where: { guildId_npm: { guildId: guild.id, npm: cleanNpm } },
   });

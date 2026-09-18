@@ -71,39 +71,37 @@ export async function setupClassroomCategories(
     const slug = slugify(className);
 
     // Channel 1: Announcement per class
-    await guild.channels.create({
-      name: `pengumuman-${slug}`,
-      type: ChannelType.GuildText,
-      parent: category.id,
-      permissionOverwrites: [
-        {
-          id: everyoneId,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
-        {
-          id: classRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-          deny: [PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: roles.taRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: roles.lecturerRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-      ],
-    });
+    const announceName = `pengumuman-${slug}`;
+    const existingAnnounce = guild.channels.cache.find(
+      (c) => c.parentId === category.id && c.name.toLowerCase() === announceName
+    );
+    if (!existingAnnounce) {
+      await guild.channels.create({
+        name: announceName,
+        type: ChannelType.GuildText,
+        parent: category.id,
+        permissionOverwrites: [
+          { id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: classRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] },
+          { id: roles.taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+          { id: roles.lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        ],
+      });
+    }
 
     // Channel 2: Discussion per class
-    const discussionChannel = await guild.channels.create({
-      name: `diskusi-${slug}`,
-      type: ChannelType.GuildText,
-      parent: category.id,
-    });
-
-    const panel = createQuickPanelEmbed(guild.name, className);
-    await discussionChannel.send(panel).catch(() => undefined);
+    const discussName = `diskusi-${slug}`;
+    const existingDiscuss = guild.channels.cache.find(
+      (c) => c.parentId === category.id && c.name.toLowerCase() === discussName
+    );
+    if (!existingDiscuss) {
+      const discussionChannel = await guild.channels.create({
+        name: discussName,
+        type: ChannelType.GuildText,
+        parent: category.id,
+      });
+      const panel = createQuickPanelEmbed(guild.name, className);
+      await discussionChannel.send(panel).catch(() => undefined);
+    }
   }
 }
