@@ -1,3 +1,5 @@
+> **Status (18 Sep 2026, chores/finalize):** partly superseded. Sections 3.2 (2) "Room Moderation Controls", 3.3 (3) "Bulk Cleanup Action" and 5 "Recommended Server Actions" are **not** built: the web is read-only for rooms and moderation lives in `/ta close-room`, `/ta reopen-room`, `/ta close-task-rooms` (see `docs/DECISIONS.md`). The queue lives on `/g/[guildId]` (difficulty list), not in `views/help/`, which was deleted with the mock dashboard.
+
 # Classync — Frontend PRD & Integration Guide
 
 **Author:** Team BudakGPT · Erik Wilbert (Bot) & Integrator  

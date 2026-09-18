@@ -9,7 +9,7 @@ Discord bot + TA web dashboard for private academic help-seeking. Built for IFes
 - **Bot:** discord.js v14, TypeScript, node-cron
 - **Web:** Next.js 15 App Router, Tailwind v4, Auth.js v5 (Discord OAuth)
 - **Core:** Prisma 6, PostgreSQL (Neon), Zod
-- **LLM:** Claude Haiku (optional — system works without it)
+- **Web dashboard link:** `WEB_URL` (used in bot embeds; defaults to localhost)
 - **Monorepo:** npm workspaces
 
 ## Quick Start
@@ -41,7 +41,7 @@ Required variables:
 | `DISCORD_CLIENT_SECRET` | OAuth2 client secret |
 | `DISCORD_GUILD_ID` | Your test server ID |
 | `AUTH_SECRET` | Random string — run `openssl rand -base64 32` |
-| `ANTHROPIC_API_KEY` | Optional — for LLM announcement parsing |
+| `WEB_URL` | Public dashboard URL for links in bot embeds (default `http://localhost:3000`) |
 
 ### 3. Set up the database
 ```bash
@@ -69,17 +69,17 @@ Web dashboard runs at http://localhost:3000
 ## Discord Setup (one-time)
 
 1. Invite the bot to your server with scopes: `bot applications.commands`
-2. Enable **Message Content Intent** in Discord Developer Portal
-3. In Discord, run: `/setup channel:#announcements`
-4. You're now a TA. Students can use `/tasks`.
+2. In Discord, run: `/setup channel:#announcements` (or `/setup auto` to provision a full class server)
+3. You are now the Classync owner and a TA. Add colleagues with `/setup add-ta`. Students use `/tasks`.
+4. Open the dashboard, sign in with Discord, and pick the server.
 
 ## Demo Script
 
 See [`docs/PRD.md §7`](docs/PRD.md) for the full 7-step demo script.
 
-1. TA posts announcement → auto-parsed card appears
+1. TA runs `/ta add-item` → the task appears in `/tasks` and on the dashboard
 2. Student opens `/tasks` → consents → marks status
-3. Five students mark Stuck with same label → "5 others flagged this"
+3. Five students mark Stuck with same label → "5 students flagged this"
 4. One student taps Request TA help → appears in queue + dashboard
 5. TA answers from dashboard → DMs arrive, answer pinned in channel
 6. Sixth student hits same concept → sees stored answer immediately
