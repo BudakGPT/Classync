@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.seed.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.56.0",
     "@prisma/client": "^6.0.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",

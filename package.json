@@ -20,8 +20,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@dicebear/collection": "9.4.2",
-    "@dicebear/core": "9.4.3"
   },
   "devDependencies": {
     "prisma": "^6.0.0",

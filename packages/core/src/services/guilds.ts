@@ -34,16 +34,6 @@ export async function addTaUser(
   });
 }
 
-export async function setHelpForumChannel(
-  discordGuildId: string,
-  channelId: string
-): Promise<Guild> {
-  return prisma.guild.update({
-    where: { discordGuildId },
-    data: { helpForumChannelId: channelId },
-  });
-}
-
 /** Atomically claims an unowned guild. Returns the existing owner when already claimed. */
 export async function claimGuildOwnership(
   discordGuildId: string,

@@ -12,7 +12,6 @@ export {
   getOrCreateGuild,
   setAnnouncementChannel,
   addTaUser,
-  setHelpForumChannel,
   claimGuildOwnership,
   transferGuildOwnership,
   removeTaUser,
@@ -28,6 +27,7 @@ export {
   parseJakartaDueAt,
   getItemsDueWithin,
   getItemsByGuild,
+  countItemsByGuild,
   getItemById,
   updateItem,
   getItemAggregate,
@@ -46,7 +46,11 @@ export {
   getStuckCount,
   getDifficultyList,
   getHeatMapData,
+  jakartaDay,
 } from "./services/concepts";
+
+// services/dashboard (TA web read models)
+export { getItemsForDashboard, getItemConceptSummaries, getConceptDetail } from "./services/dashboard";
 
 // services/requests
 export {
@@ -66,6 +70,8 @@ export {
   getAnswerDeliveryContext,
   stampDelivered,
   getLatestAnswerForConcept,
+  getAnswersForConcept,
+  getAnswerStatus,
   getAnswersForGuild,
   getDeliveredAnswerCount,
 } from "./services/answers";
@@ -124,7 +130,3 @@ export type { PeerMetrics } from "./services/matchMetrics";
 
 // Re-export Prisma enum types needed by web
 export type { ItemKind, StatusState, RequestState, TopicRoomState, MatchState } from "@prisma/client";
-
-// llm
-export { parseAnnouncement } from "./llm";
-export type { ParsedAnnouncement } from "./llm";

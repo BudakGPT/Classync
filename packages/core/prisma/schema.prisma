@@ -13,7 +13,6 @@ model Guild {
   name                  String
   ownerUserId           String?
   announcementChannelId String?
-  helpForumChannelId    String?
   taUserIds             String[] // Discord user IDs allowed to use /ta and the dashboard
   installedAt           DateTime  @default(now())
   items                 Item[]
@@ -51,7 +50,6 @@ model Item {
   description       String?
   dueAt             DateTime?
   kind              ItemKind     @default(ASSIGNMENT)
-  sourceMessageId   String?
   discordCategoryId String?
   createdAt         DateTime     @default(now())
   guild             Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
@@ -86,7 +84,6 @@ model Concept {
   id           String        @id @default(cuid())
   itemId       String
   label        String // normalized: trimmed, lowercased, punctuation stripped
-  aliases      String[]
   createdAt    DateTime      @default(now())
   item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   statuses     ItemStatus[]
@@ -126,6 +123,7 @@ model TopicRoomMember {
   id        String    @id @default(cuid())
   roomId    String
   studentId String
+  displayName String? // guild display name captured at request time; only path a name reaches a TA
   joinedAt  DateTime  @default(now())
   room      TopicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -137,6 +135,7 @@ model HelpRequest {
   id        String       @id @default(cuid())
   conceptId String
   studentId String
+  displayName String? // guild display name captured at request time; only path a name reaches a TA
   state     RequestState @default(OPEN)
   createdAt DateTime     @default(now())
   concept   Concept      @relation(fields: [conceptId], references: [id], onDelete: Cascade)
