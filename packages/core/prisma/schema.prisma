@@ -11,7 +11,9 @@ model Guild {
   id                    String    @id @default(cuid())
   discordGuildId        String    @unique
   name                  String
+  ownerUserId           String?
   announcementChannelId String?
+  helpForumChannelId    String?
   taUserIds             String[]  // Discord user IDs allowed to use /ta and the dashboard
   installedAt           DateTime  @default(now())
   items                 Item[]
@@ -19,14 +21,15 @@ model Guild {
 }
 
 model Student {
-  id            String       @id @default(cuid())
-  guildId       String
-  discordUserId String       // Discord snowflakes are ALWAYS String
-  consentedAt   DateTime?
-  revokedAt     DateTime?
-  guild         Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  statuses      ItemStatus[]
-  helpRequests  HelpRequest[]
+  id               String            @id @default(cuid())
+  guildId          String
+  discordUserId    String            // Discord snowflakes are ALWAYS String
+  consentedAt      DateTime?
+  revokedAt        DateTime?
+  guild            Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  statuses         ItemStatus[]
+  helpRequests     HelpRequest[]
+  topicRoomMembers TopicRoomMember[]
 
   @@unique([guildId, discordUserId])
 }
@@ -39,17 +42,18 @@ enum ItemKind {
 }
 
 model Item {
-  id              String       @id @default(cuid())
-  guildId         String
-  title           String
-  description     String?
-  dueAt           DateTime?
-  kind            ItemKind     @default(ASSIGNMENT)
-  sourceMessageId String?
-  createdAt       DateTime     @default(now())
-  guild           Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  concepts        Concept[]
-  statuses        ItemStatus[]
+  id                String       @id @default(cuid())
+  guildId           String
+  title             String
+  description       String?
+  dueAt             DateTime?
+  kind              ItemKind     @default(ASSIGNMENT)
+  sourceMessageId   String?
+  discordCategoryId String?
+  createdAt         DateTime     @default(now())
+  guild             Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  concepts          Concept[]
+  statuses          ItemStatus[]
 }
 
 enum StatusState {
@@ -60,16 +64,16 @@ enum StatusState {
 }
 
 model ItemStatus {
-  id        String      @id @default(cuid())
-  itemId    String
-  studentId String
-  state     StatusState @default(NONE)
-  conceptId String?
-  updatedAt DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  itemId     String
+  studentId  String
+  state      StatusState @default(NONE)
+  conceptId  String?
+  updatedAt  DateTime    @updatedAt
   remindedAt DateTime?
-  item      Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  concept   Concept?    @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  item       Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  concept    Concept?    @relation(fields: [conceptId], references: [id], onDelete: SetNull)
 
   @@unique([itemId, studentId])
 }
@@ -84,6 +88,7 @@ model Concept {
   statuses     ItemStatus[]
   helpRequests HelpRequest[]
   answers      Answer[]
+  topicRoom    TopicRoom?
 
   @@unique([itemId, label])
 }
@@ -92,6 +97,35 @@ enum RequestState {
   OPEN
   ANSWERED
   CLOSED
+}
+
+enum TopicRoomState {
+  OPEN
+  CLOSED
+}
+
+model TopicRoom {
+  id             String            @id @default(cuid())
+  conceptId      String            @unique
+  channelId      String?           @unique
+  state          TopicRoomState    @default(OPEN)
+  createdAt      DateTime          @default(now())
+  closedAt       DateTime?
+  closedById     String?
+  provisioningAt DateTime?
+  concept        Concept           @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  members        TopicRoomMember[]
+}
+
+model TopicRoomMember {
+  id        String    @id @default(cuid())
+  roomId    String
+  studentId String
+  joinedAt  DateTime  @default(now())
+  room      TopicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, studentId])
 }
 
 model HelpRequest {
@@ -115,5 +149,6 @@ model Answer {
   deliveredAt     DateTime? // null = outbox; bot delivers and stamps
   deliveredCount  Int       @default(0)
   pinnedMessageId String?
+  threadMessageId String?
   concept         Concept   @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }
