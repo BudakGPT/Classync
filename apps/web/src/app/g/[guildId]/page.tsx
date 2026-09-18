@@ -107,7 +107,10 @@ export default async function GuildOverviewPage({ params }: Props) {
                     <p className="font-medium">{d.concept.label}</p>
                     <p className="text-xs text-gray-400">{d.item.title}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="rounded bg-slate-700/60 border border-slate-600/40 px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                      No Room Yet
+                    </span>
                     <DifficultyBadge band={d.band} open={d.open} answered={d.answered} />
                     <span className="text-gray-400 text-sm">→</span>
                   </div>

@@ -32,6 +32,9 @@ export function HelpQueue({ onRespond, className }: { onRespond: (clusterId: str
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[14px] font-semibold text-ink">{h.concept}</span>
                     <ClassChip classId={h.classId} />
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-600 border border-slate-200/80">
+                      No Room Yet
+                    </span>
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
                     <span className="font-semibold text-ink-2 tabular">{plural(n, 'active request')}</span>
