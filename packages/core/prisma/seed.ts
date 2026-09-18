@@ -168,7 +168,7 @@ async function main() {
   await prisma.itemStatus.create({
     data: {
       itemId: item1.id,
-      studentId: students[4].id,
+      studentId: students[9].id,
       state: StatusState.STUCK,
       conceptId: concept2.id,
     },
@@ -177,7 +177,7 @@ async function main() {
   const answeredRequest = await prisma.helpRequest.create({
     data: {
       conceptId: concept2.id,
-      studentId: students[4].id,
+      studentId: students[9].id,
       state: RequestState.ANSWERED,
     },
   });
