@@ -1,5 +1,5 @@
-import { prisma } from "../db.js";
-import { RosterRole, type AcademicRoster } from "@prisma/client";
+import { prisma } from "../db";
+import { RosterRole, type AcademicRoster, type Guild } from "@prisma/client";
 
 export interface RosterEntryInput {
   npm: string;
@@ -136,4 +136,9 @@ export async function setGuildAuth(
     where: { discordGuildId },
     data: params,
   });
+}
+
+/** Web toggle (by DB id). The bot applies it on the next `/setup`; nothing in Discord changes here. */
+export async function setGuildAuthEnabled(guildId: string, authEnabled: boolean): Promise<Guild> {
+  return prisma.guild.update({ where: { id: guildId }, data: { authEnabled } });
 }

@@ -124,9 +124,15 @@ export {
 } from "./services/matches";
 export type { ProviderCandidate, ActiveMatchView, ExpiredMatch } from "./services/matches";
 
+// services/roster (NPM verification gate)
+export { saveRosterEntries, getRosterByGuild, getDistinctClasses, verifyRosterMember, setGuildAuth, setGuildAuthEnabled } from "./services/roster";
+export type { RosterEntryInput, VerifyResult } from "./services/roster";
+export { parseRosterFile } from "./services/rosterParser";
+export type { ParsedRoster, RosterRoleInput } from "./services/rosterParser";
+
 // services/matchMetrics
 export { getPeerMetrics } from "./services/matchMetrics";
 export type { PeerMetrics } from "./services/matchMetrics";
 
 // Re-export Prisma enum types needed by web
-export type { ItemKind, StatusState, RequestState, TopicRoomState, MatchState } from "@prisma/client";
+export type { ItemKind, StatusState, RequestState, TopicRoomState, MatchState, RosterRole, AcademicRoster } from "@prisma/client";

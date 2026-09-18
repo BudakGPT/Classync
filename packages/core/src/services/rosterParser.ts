@@ -1,168 +1,142 @@
+// Spreadsheet → RosterEntryInput[]. Column detection is heuristic by default; with an OpenRouter key
+// the LLM is asked ONLY for the column mapping, from the header row plus masked sample cells.
+// Real NPMs and names never leave the process (CLAUDE.md rule 6: no student identity to the LLM).
 import * as XLSX from "xlsx";
 import { z } from "zod";
-import type { RosterEntryInput } from "./roster.js";
+import { completeJson, llmAvailable } from "../llm";
+import type { RosterEntryInput } from "./roster";
 
-const RosterItemSchema = z.object({
-  npm: z.coerce.string().min(1),
-  name: z.coerce.string().min(1),
-  role: z.enum(["STUDENT", "TA"]).default("STUDENT"),
-  className: z.coerce.string().nullable().optional(),
-});
+export type RosterRoleInput = "STUDENT" | "TA";
 
-const RosterListSchema = z.array(RosterItemSchema);
-
-function cleanClass(c?: string | null): string | null {
-  if (!c) return null;
-  const trimmed = c.trim();
-  if (!trimmed) return null;
-  if (/^[a-zA-Z]$/.test(trimmed)) return `Kelas ${trimmed.toUpperCase()}`;
-  if (!/^kelas/i.test(trimmed) && /^[a-zA-Z0-9\s\-]+$/.test(trimmed)) {
-    return `Kelas ${trimmed}`;
-  }
-  return trimmed;
-}
-
-function parseWithHeuristics(rawRows: unknown[][], defaultRole: "STUDENT" | "TA"): RosterEntryInput[] {
-  if (rawRows.length === 0) return [];
-  let headerIdx = 0;
-  for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
-    const rowStr = rawRows[i].map((c) => String(c ?? "").toLowerCase()).join(" ");
-    if (rowStr.includes("npm") || rowStr.includes("nim") || rowStr.includes("nama") || rowStr.includes("name")) {
-      headerIdx = i;
-      break;
-    }
-  }
-
-  const headers = rawRows[headerIdx].map((c) => String(c ?? "").trim().toLowerCase());
-  let npmCol = headers.findIndex((h) => h.includes("npm") || h.includes("nim") || h.includes("id"));
-  let nameCol = headers.findIndex((h) => h.includes("nama") || h.includes("name"));
-  let classCol = headers.findIndex((h) => h.includes("kelas") || h.includes("class") || h.includes("rombel") || h.includes("seksi"));
-  let roleCol = headers.findIndex((h) => h.includes("role") || h.includes("peran") || h.includes("status"));
-
-  if (npmCol === -1 || nameCol === -1) {
-    npmCol = 0;
-    nameCol = 1;
-    classCol = 2;
-  }
-
-  const results: RosterEntryInput[] = [];
-  for (let i = headerIdx + 1; i < rawRows.length; i++) {
-    const row = rawRows[i];
-    if (!row || row.length === 0) continue;
-    const rawNpm = String(row[npmCol] ?? "").trim();
-    const rawName = String(row[nameCol] ?? "").trim();
-    if (!rawNpm || !rawName || rawName.toLowerCase() === "nama") continue;
-
-    let role = defaultRole;
-    if (roleCol !== -1 && row[roleCol]) {
-      const rStr = String(row[roleCol]).toLowerCase();
-      if (rStr.includes("ta") || rStr.includes("asdos") || rStr.includes("asisten")) role = "TA";
-      else if (rStr.includes("mahasiswa") || rStr.includes("student")) role = "STUDENT";
-    }
-
-    const rawClass = classCol !== -1 && row[classCol] ? cleanClass(String(row[classCol])) : null;
-    results.push({
-      npm: rawNpm.replace(/\s+/g, ""),
-      name: rawName,
-      role,
-      className: rawClass,
-    });
-  }
-  return results;
-}
-
-async function callOpenRouter(promptText: string): Promise<RosterEntryInput[] | null> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://classync.app",
-        "X-Title": "Classync Roster Parser",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.0-flash-lite-preview-02-05:free",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an academic roster parser. Extract students and TAs into a JSON array: " +
-              '[{"npm":"string","name":"string","role":"STUDENT"|"TA","className":"string|null"}]. ' +
-              "Standardize class names (e.g. 'A' -> 'Kelas A'). Reply ONLY with the JSON array.",
-          },
-          { role: "user", content: promptText },
-        ],
-        temperature: 0.1,
-      }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
-
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return null;
-    const parsed = RosterListSchema.safeParse(JSON.parse(jsonMatch[0]));
-    if (!parsed.success) return null;
-
-    return parsed.data.map((item) => ({
-      npm: item.npm.trim().replace(/\s+/g, ""),
-      name: item.name.trim(),
-      role: item.role,
-      className: cleanClass(item.className),
-    }));
-  } catch {
-    return null;
-  }
-}
-
-export async function parseRosterFile(
-  fileBuffer: Buffer | ArrayBuffer,
-  options: { defaultRole?: "STUDENT" | "TA" } = {}
-): Promise<{
+export interface ParsedRoster {
   entries: RosterEntryInput[];
   detectedClasses: string[];
   totalStudents: number;
   totalTas: number;
   parsedBy: "openrouter" | "heuristic";
-}> {
+}
+
+interface ColumnMap {
+  npm: number;
+  name: number;
+  className: number | null;
+  role: number | null;
+}
+
+const ColumnMapSchema = z.object({
+  npm: z.number().int().min(0),
+  name: z.number().int().min(0),
+  className: z.number().int().min(0).nullable(),
+  role: z.number().int().min(0).nullable(),
+});
+
+const NPM_HEADER = /\b(npm|nim|nrp|no\.?\s*mahasiswa|student\s*id|id)\b/i;
+const NAME_HEADER = /(nama|name)/i;
+const CLASS_HEADER = /(kelas|class|rombel|seksi|section)/i;
+const ROLE_HEADER = /(role|peran|status|jabatan|keterangan|jenis)/i;
+const SAMPLE_ROWS = 3;
+
+export function cleanClass(raw?: string | null): string | null {
+  const trimmed = raw?.trim() ?? "";
+  if (!trimmed) return null;
+  if (/^[a-zA-Z]$/.test(trimmed)) return `Kelas ${trimmed.toUpperCase()}`;
+  if (!/^kelas/i.test(trimmed) && /^[a-zA-Z0-9\s-]+$/.test(trimmed)) return `Kelas ${trimmed}`;
+  return trimmed;
+}
+
+const cell = (v: unknown): string => String(v ?? "").trim();
+
+function findHeaderRow(rows: unknown[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const text = rows[i].map(cell).join(" ");
+    if (NPM_HEADER.test(text) || NAME_HEADER.test(text)) return i;
+  }
+  return 0;
+}
+
+function mapColumnsByHeuristics(headers: string[]): ColumnMap {
+  const find = (re: RegExp) => headers.findIndex((h) => re.test(h));
+  const npm = find(NPM_HEADER);
+  const name = find(NAME_HEADER);
+  if (npm === -1 || name === -1) return { npm: 0, name: 1, className: 2, role: null };
+  const idx = (i: number) => (i === -1 ? null : i);
+  return { npm, name, className: idx(find(CLASS_HEADER)), role: idx(find(ROLE_HEADER)) };
+}
+
+/** "2206123456" → "9999999999", "Budi S." → "aaaa a." — shape only, no identity. */
+function maskCell(v: unknown): string {
+  return cell(v).slice(0, 24).replace(/\d/g, "9").replace(/\p{L}/gu, "a");
+}
+
+async function mapColumnsByLlm(rows: unknown[][], headerIdx: number): Promise<ColumnMap | null> {
+  const headers = rows[headerIdx].map(cell);
+  const samples = rows.slice(headerIdx + 1, headerIdx + 1 + SAMPLE_ROWS).map((r) => r.map(maskCell));
+  const result = await completeJson(
+    ColumnMapSchema,
+    "You map spreadsheet columns of an Indonesian university class roster. Cell values are masked " +
+      "(digits→9, letters→a). Reply ONLY with JSON {\"npm\":i,\"name\":i,\"className\":i|null,\"role\":i|null} " +
+      "using 0-based column indexes. npm = student number (NPM/NIM), name = full name, className = class/" +
+      "section (Kelas/Rombel/Seksi), role = student vs TA/asdos column.",
+    JSON.stringify({ headers, samples }),
+  );
+  if (!result || result.npm >= headers.length || result.name >= headers.length || result.npm === result.name) return null;
+  const inRange = (i: number | null) => (i !== null && i < headers.length ? i : null);
+  return { npm: result.npm, name: result.name, className: inRange(result.className), role: inRange(result.role) };
+}
+
+function roleFromCell(v: unknown, fallback: RosterRoleInput): RosterRoleInput {
+  const text = cell(v).toLowerCase();
+  if (!text) return fallback;
+  if (/\b(ta|asdos|asisten|assistant)\b/.test(text)) return "TA";
+  if (/(mahasiswa|student)/.test(text)) return "STUDENT";
+  return fallback;
+}
+
+function rowsToEntries(rows: unknown[][], headerIdx: number, map: ColumnMap, defaultRole: RosterRoleInput): RosterEntryInput[] {
+  const entries: RosterEntryInput[] = [];
+  for (const row of rows.slice(headerIdx + 1)) {
+    if (!row || row.length === 0) continue;
+    const npm = cell(row[map.npm]).replace(/\s+/g, "");
+    const name = cell(row[map.name]);
+    if (!npm || !name || NAME_HEADER.test(name)) continue;
+    entries.push({
+      npm,
+      name,
+      role: map.role === null ? defaultRole : roleFromCell(row[map.role], defaultRole),
+      className: map.className === null ? null : cleanClass(cell(row[map.className])),
+    });
+  }
+  return entries;
+}
+
+function summarize(entries: RosterEntryInput[], parsedBy: ParsedRoster["parsedBy"]): ParsedRoster {
+  const classes = new Set(entries.map((e) => e.className).filter((c): c is string => Boolean(c)));
+  return {
+    entries,
+    detectedClasses: [...classes].sort(),
+    totalStudents: entries.filter((e) => e.role !== "TA").length,
+    totalTas: entries.filter((e) => e.role === "TA").length,
+    parsedBy,
+  };
+}
+
+/** Parse .xlsx/.xls/.csv bytes (first sheet). Works with no API key via header heuristics. */
+export async function parseRosterFile(
+  fileBuffer: Buffer | ArrayBuffer,
+  options: { defaultRole?: RosterRoleInput } = {},
+): Promise<ParsedRoster> {
   const defaultRole = options.defaultRole ?? "STUDENT";
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
-  const firstSheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[firstSheetName];
-  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = sheet ? XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 }) : [];
+  if (rows.length === 0) return summarize([], "heuristic");
 
-  // 1. Try OpenRouter LLM first if file has data and API is available
-  if (rawRows.length > 0 && process.env.OPENROUTER_API_KEY) {
-    const sampleRows = rawRows.slice(0, 100);
-    const prompt = `Spreadsheet rows:\n${JSON.stringify(sampleRows)}\nDefault role: ${defaultRole}`;
-    const llmResult = await callOpenRouter(prompt);
-    if (llmResult && llmResult.length > 0) {
-      const classes = Array.from(new Set(llmResult.map((e) => e.className).filter((c): c is string => Boolean(c)))).sort();
-      return {
-        entries: llmResult,
-        detectedClasses: classes,
-        totalStudents: llmResult.filter((e) => e.role === "STUDENT").length,
-        totalTas: llmResult.filter((e) => e.role === "TA").length,
-        parsedBy: "openrouter",
-      };
-    }
+  const headerIdx = findHeaderRow(rows);
+  const llmMap = llmAvailable() ? await mapColumnsByLlm(rows, headerIdx) : null;
+  if (llmMap) {
+    const entries = rowsToEntries(rows, headerIdx, llmMap, defaultRole);
+    if (entries.length > 0) return summarize(entries, "openrouter");
   }
-
-  // 2. Deterministic Heuristic Parser fallback
-  const heuristicResult = parseWithHeuristics(rawRows, defaultRole);
-  const classes = Array.from(new Set(heuristicResult.map((e) => e.className).filter((c): c is string => Boolean(c)))).sort();
-
-  return {
-    entries: heuristicResult,
-    detectedClasses: classes,
-    totalStudents: heuristicResult.filter((e) => e.role === "STUDENT").length,
-    totalTas: heuristicResult.filter((e) => e.role === "TA").length,
-    parsedBy: "heuristic",
-  };
+  const heuristicMap = mapColumnsByHeuristics(rows[headerIdx].map((h) => cell(h).toLowerCase()));
+  return summarize(rowsToEntries(rows, headerIdx, heuristicMap, defaultRole), "heuristic");
 }
