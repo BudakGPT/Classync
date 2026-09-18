@@ -60,6 +60,7 @@ export async function getTaQueue(guildId: string) {
     where: { item: { guildId } },
     include: {
       item: { select: { id: true, title: true } },
+      topicRoom: true,
       helpRequests: {
         where: { state: "OPEN" },
         include: { student: { select: { discordUserId: true } } },
@@ -69,7 +70,7 @@ export async function getTaQueue(guildId: string) {
   });
 
   return concepts
-    .filter((concept) => concept.helpRequests.length > 0)
+    .filter((concept) => concept.helpRequests.length > 0 || concept.topicRoom !== null)
     .map((concept) => ({
       conceptId: concept.id,
       label: concept.label,
@@ -78,9 +79,20 @@ export async function getTaQueue(guildId: string) {
         discordUserId: request.student.discordUserId,
         createdAt: request.createdAt,
       })),
+      topicRoom: concept.topicRoom,
     }))
     .sort((a, b) =>
       b.requesters.length - a.requesters.length ||
-      a.requesters[0].createdAt.getTime() - b.requesters[0].createdAt.getTime()
+      (a.requesters[0]?.createdAt.getTime() ?? Number.MAX_SAFE_INTEGER) -
+      (b.requesters[0]?.createdAt.getTime() ?? Number.MAX_SAFE_INTEGER)
     );
+}
+
+/** Concepts a registered TA may answer, including ones without a private escalation. */
+export async function getTaAnswerableConcepts(guildId: string) {
+  return prisma.concept.findMany({
+    where: { item: { guildId } },
+    include: { item: { select: { id: true, title: true } }, topicRoom: true },
+    orderBy: { createdAt: "asc" },
+  });
 }

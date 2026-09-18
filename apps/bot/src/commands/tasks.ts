@@ -1,5 +1,5 @@
 import { MessageFlags, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { getConsentedStudent, getGuildByDiscordId } from "@classync/core";
+import { getConsentedStudent, getGuildByDiscordId, isTa } from "@classync/core";
 import { consentScreen, taskListScreen } from "../ui/tasks.js";
 
 export default {
@@ -12,6 +12,13 @@ export default {
     const guild = await getGuildByDiscordId(interaction.guildId);
     if (!guild) {
       await interaction.reply({ content: "A TA must run `/setup channel` first.", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    if (await isTa(interaction.guildId, interaction.user.id)) {
+      await interaction.reply({
+        content: "Registered TAs cannot use student task flows. Use `/ta` to manage items, rooms, and answers.",
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
     const student = await getConsentedStudent(guild.id, interaction.user.id);

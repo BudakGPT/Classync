@@ -29,6 +29,7 @@ export async function getAnswerDeliveryContext(answerId: string) {
       concept: {
         include: {
           item: { include: { guild: { select: { announcementChannelId: true, discordGuildId: true } } } },
+          topicRoom: true,
         },
       },
     },
@@ -39,18 +40,19 @@ export async function getAnswerDeliveryContext(answerId: string) {
 export async function stampDelivered(
   answerId: string,
   deliveredCount: number,
-  pinnedMessageId?: string
+  pinnedMessageId?: string,
+  threadMessageId?: string
 ): Promise<void> {
   await prisma.answer.updateMany({
     where: { id: answerId, deliveredAt: null },
-    data: { deliveredAt: new Date(), deliveredCount, pinnedMessageId },
+    data: { deliveredAt: new Date(), deliveredCount, pinnedMessageId, threadMessageId },
   });
 }
 
 /** Get the latest answer for a concept (for the "already answered" bot message). */
 export async function getLatestAnswerForConcept(conceptId: string): Promise<Answer | null> {
   return prisma.answer.findFirst({
-    where: { conceptId, deliveredAt: { not: null } },
+    where: { conceptId },
     orderBy: { createdAt: "desc" },
   });
 }

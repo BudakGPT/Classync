@@ -10,6 +10,7 @@ export * from "./services/status.js";
 export * from "./services/concepts.js";
 export * from "./services/requests.js";
 export * from "./services/answers.js";
+export * from "./services/topicRooms.js";
 export * from "./services/students.js";
 
 // LLM

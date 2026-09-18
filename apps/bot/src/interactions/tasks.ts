@@ -14,16 +14,20 @@ import {
   createHelpRequest,
   getConsentedStudent,
   getGuildByDiscordId,
+  getStuckCount,
   getItemById,
   getOrCreateConcept,
   getOrCreateStudent,
   getConceptById,
+  getJoinableTopicRoom,
+  isTa,
   giveConsent,
   normalizeLabel,
   revokeAndDelete,
   setStatus,
 } from "@classync/core";
 import { conceptPickerScreen, consentScreen, stuckNotice, taskDetailScreen, taskListScreen } from "../ui/tasks.js";
+import { ensureTopicRoom, threadUrl } from "../topicRooms.js";
 
 type TaskComponent = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 
@@ -33,7 +37,9 @@ async function contextForItem(itemId: string, userId: string, interactionGuildId
   if (interactionGuildId !== null) {
     const guild = await getGuildByDiscordId(interactionGuildId);
     if (!guild || item.guildId !== guild.id) return null;
+    if (await isTa(interactionGuildId, userId)) return null;
   }
+  if (item.dueAt && item.dueAt.getTime() < Date.now()) return null;
   const student = await getConsentedStudent(item.guildId, userId);
   return student ? { item, student } : null;
 }
@@ -50,6 +56,10 @@ async function saveStuck(interaction: StringSelectMenuInteraction, itemId: strin
   const concept = await getConceptById(conceptId);
   if (!concept || concept.itemId !== itemId) return interaction.followUp({ content: "That concept is unavailable.", flags: MessageFlags.Ephemeral });
   await setStatus(itemId, context.student.id, "STUCK", concept.id);
+  const guild = interaction.guildId ? await getGuildByDiscordId(interaction.guildId) : null;
+  if (guild && await getStuckCount(concept.id)) {
+    await ensureTopicRoom(interaction.client, guild, { id: concept.id, title: context.item.title, label: concept.label });
+  }
   return interaction.editReply(await taskDetailScreen(itemId, context.student, await stuckNotice(concept.id)));
 }
 
@@ -61,6 +71,10 @@ async function handleConsent(interaction: ButtonInteraction): Promise<void> {
   const guild = await getGuildByDiscordId(interaction.guildId);
   if (!guild) {
     await interaction.followUp({ content: "A TA must run `/setup channel` first.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (await isTa(interaction.guildId, interaction.user.id)) {
+    await interaction.editReply({ content: "Registered TAs cannot use student task flows.", components: [] });
     return;
   }
   if (interaction.customId.endsWith(":decline")) {
@@ -87,7 +101,7 @@ async function handlePrivacy(interaction: ButtonInteraction): Promise<void> {
       new ButtonBuilder().setCustomId("task:privacy-cancel").setLabel("Cancel").setStyle(ButtonStyle.Secondary),
     );
     await interaction.editReply({
-      content: "Delete all of your statuses and TA-help requests in this server, and revoke consent? This cannot be undone.",
+      content: "Delete all of your statuses and TA-help requests in this server, and revoke consent? This cannot be undone. Classync cannot erase messages you voluntarily posted in Discord discussions.",
       components: [row],
     });
     return;
@@ -115,6 +129,24 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
   }
   if (action === "stuck") {
     await interaction.editReply(await conceptPickerScreen(itemId));
+    return;
+  }
+  if (action === "join" && state) {
+    // The component stores a room ID, so resolve the student's current private concept before opening it.
+    const status = await import("@classync/core").then(({ getMyStatus }) => getMyStatus(itemId, context.student.id));
+    const currentRoom = status?.conceptId ? await getJoinableTopicRoom(status.conceptId) : null;
+    if (!currentRoom || currentRoom.id !== state || !currentRoom.threadId || !interaction.guildId) {
+      await interaction.editReply(await taskDetailScreen(itemId, context.student, "That discussion room is no longer available."));
+      return;
+    }
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setLabel("Open discussion").setStyle(ButtonStyle.Link).setURL(threadUrl(interaction.guildId, currentRoom.threadId)),
+      new ButtonBuilder().setCustomId(`task:back:${itemId}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.editReply({
+      content: "Joining is visible to other participants. Your private Stuck report is not. Revoking consent deletes Classync private data but cannot erase messages you voluntarily post in Discord.",
+      components: [row],
+    });
     return;
   }
   if (action === "help") {
@@ -171,6 +203,10 @@ async function handleModal(interaction: ModalSubmitInteraction): Promise<void> {
   }
   const concept = await getOrCreateConcept(itemId, rawLabel);
   await setStatus(itemId, context.student.id, "STUCK", concept.id);
+  const guild = interaction.guildId ? await getGuildByDiscordId(interaction.guildId) : null;
+  if (guild && await getStuckCount(concept.id)) {
+    await ensureTopicRoom(interaction.client, guild, { id: concept.id, title: context.item.title, label: concept.label });
+  }
   await interaction.editReply(await taskDetailScreen(itemId, context.student, await stuckNotice(concept.id)));
 }
 
@@ -202,8 +238,7 @@ export async function handleReminderInteraction(interaction: ButtonInteraction):
     return true;
   }
   if (action === "done") {
-    await setStatus(itemId, context.student.id, "DONE");
-    await interaction.editReply({ content: "✅ Marked as done.", components: [] });
+    await interaction.editReply({ content: "The Done status is no longer used. Use **Still stuck** if you need help.", components: [] });
   } else if (action === "stuck") {
     await interaction.editReply(await conceptPickerScreen(itemId));
   }

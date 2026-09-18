@@ -4,7 +4,6 @@ import { getItemsDueWithin, getReminderRecipients, markReminded } from "@classyn
 
 function reminderComponents(itemId: string) {
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`reminder:done:${itemId}`).setLabel("Done").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`reminder:stuck:${itemId}`).setLabel("Still stuck").setStyle(ButtonStyle.Danger),
   )];
 }

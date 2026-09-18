@@ -34,6 +34,51 @@ export async function addTaUser(
   });
 }
 
+export async function setHelpForumChannel(
+  discordGuildId: string,
+  channelId: string
+): Promise<Guild> {
+  return prisma.guild.update({
+    where: { discordGuildId },
+    data: { helpForumChannelId: channelId },
+  });
+}
+
+/** Atomically claims an unowned guild. Returns the existing owner when already claimed. */
+export async function claimGuildOwnership(
+  discordGuildId: string,
+  discordUserId: string
+): Promise<{ guild: Guild; claimed: boolean }> {
+  const result = await prisma.guild.updateMany({
+    where: { discordGuildId, ownerUserId: null },
+    data: { ownerUserId: discordUserId },
+  });
+  const guild = await prisma.guild.findUniqueOrThrow({ where: { discordGuildId } });
+  return { guild, claimed: result.count === 1 };
+}
+
+export async function transferGuildOwnership(
+  discordGuildId: string,
+  discordUserId: string
+): Promise<Guild> {
+  return prisma.guild.update({
+    where: { discordGuildId },
+    data: { ownerUserId: discordUserId },
+  });
+}
+
+export async function removeTaUser(
+  discordGuildId: string,
+  discordUserId: string
+): Promise<Guild> {
+  const guild = await prisma.guild.findUniqueOrThrow({ where: { discordGuildId } });
+  if (!guild.taUserIds.includes(discordUserId)) return guild;
+  return prisma.guild.update({
+    where: { discordGuildId },
+    data: { taUserIds: guild.taUserIds.filter((id) => id !== discordUserId) },
+  });
+}
+
 export async function getGuildByDiscordId(
   discordGuildId: string
 ): Promise<Guild | null> {

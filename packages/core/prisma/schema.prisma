@@ -11,7 +11,9 @@ model Guild {
   id                    String    @id @default(cuid())
   discordGuildId        String    @unique
   name                  String
+  ownerUserId           String?
   announcementChannelId String?
+  helpForumChannelId    String?
   taUserIds             String[]  // Discord user IDs allowed to use /ta and the dashboard
   installedAt           DateTime  @default(now())
   items                 Item[]
@@ -84,6 +86,7 @@ model Concept {
   statuses     ItemStatus[]
   helpRequests HelpRequest[]
   answers      Answer[]
+  topicRoom    TopicRoom?
 
   @@unique([itemId, label])
 }
@@ -92,6 +95,24 @@ enum RequestState {
   OPEN
   ANSWERED
   CLOSED
+}
+
+enum TopicRoomState {
+  OPEN
+  ANSWERED
+  ARCHIVED
+}
+
+model TopicRoom {
+  id             String         @id @default(cuid())
+  conceptId      String         @unique
+  threadId       String?        @unique
+  state          TopicRoomState @default(OPEN)
+  createdAt      DateTime       @default(now())
+  answeredAt     DateTime?
+  archivedAt     DateTime?
+  provisioningAt DateTime?
+  concept        Concept        @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }
 
 model HelpRequest {
@@ -115,5 +136,6 @@ model Answer {
   deliveredAt     DateTime? // null = outbox; bot delivers and stamps
   deliveredCount  Int       @default(0)
   pinnedMessageId String?
+  threadMessageId String?
   concept         Concept   @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }

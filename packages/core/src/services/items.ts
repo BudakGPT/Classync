@@ -43,7 +43,14 @@ export async function getItemsDueWithin(from: Date, until: Date): Promise<Item[]
 
 export async function getItemsByGuild(guildId: string): Promise<Item[]> {
   return prisma.item.findMany({
-    where: { guildId },
+    // Keep undated items, but do not offer students tasks after their deadline.
+    where: {
+      guildId,
+      OR: [
+        { dueAt: null },
+        { dueAt: { gte: new Date() } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     take: 10,
   });

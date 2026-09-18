@@ -11,9 +11,13 @@ export default {
       .addStringOption((option) => option.setName("kind").setDescription("Task type").addChoices(
         { name: "Assignment", value: "ASSIGNMENT" }, { name: "Quiz", value: "QUIZ" },
         { name: "Exam", value: "EXAM" }, { name: "Reading", value: "READING" })))
-    .addSubcommand((sub) => sub.setName("queue").setDescription("View open TA-help requests"))
+    .addSubcommand((sub) => sub.setName("queue").setDescription("View TA-help requests and discussion rooms"))
     .addSubcommand((sub) => sub.setName("answer").setDescription("Answer a concept")
       .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true))
-      .addStringOption((option) => option.setName("body").setDescription("Answer").setRequired(true))),
+      .addStringOption((option) => option.setName("body").setDescription("Answer").setRequired(true)))
+    .addSubcommand((sub) => sub.setName("archive-room").setDescription("Lock and archive a discussion room")
+      .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true)))
+    .addSubcommand((sub) => sub.setName("reopen-room").setDescription("Explicitly reopen a discussion room")
+      .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true))),
   execute: handleTaCommand as (interaction: ChatInputCommandInteraction) => Promise<void>,
 };
