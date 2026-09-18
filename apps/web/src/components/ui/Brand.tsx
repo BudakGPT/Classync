@@ -1,20 +1,20 @@
 import type { SVGProps } from "react";
 import { cn } from "@/lib/utils";
+import { MARK_LIGHT_PATH, MARK_PRIMARY_PATH, MARK_VIEWBOX } from "./brandPaths";
 
-/** Classync mark: an open "C" orbit with a synced dot. */
+/** Classync mark: two speech bubbles in rotation, from the official logo. */
 export function ClassyncMark({ size = 32, className }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" className={className} aria-hidden>
-      <defs>
-        <linearGradient id="cs-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#7472e8" />
-          <stop offset="0.55" stopColor="#5b57d6" />
-          <stop offset="1" stopColor="#7c4dd9" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill="url(#cs-g)" />
-      <path d="M21.6 11.1a6.6 6.6 0 1 0 0 9.8" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-      <circle cx="22.6" cy="16" r="2.2" fill="#7ff0d9" />
+    <svg
+      width={size}
+      height={size}
+      viewBox={MARK_VIEWBOX}
+      className={className}
+      role="img"
+      aria-label="Classync"
+    >
+      <path fill="var(--color-brand-500)" fillRule="evenodd" d={MARK_PRIMARY_PATH} />
+      <path fill="var(--color-brand-400)" fillRule="evenodd" d={MARK_LIGHT_PATH} />
     </svg>
   );
 }
@@ -22,8 +22,8 @@ export function ClassyncMark({ size = 32, className }: { size?: number; classNam
 export function Logo({ className, size = 32 }: { className?: string; size?: number }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <ClassyncMark size={size} className="shrink-0 drop-shadow-[0_4px_10px_rgb(91_87_214/0.35)]" />
-      <span className="text-[17px] font-extrabold tracking-tight text-ink">Classync</span>
+      <ClassyncMark size={size} className="shrink-0" />
+      <span className="text-[17px] font-extrabold tracking-tight text-brand-900">Classync</span>
     </span>
   );
 }
