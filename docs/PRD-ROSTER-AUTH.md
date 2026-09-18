@@ -157,3 +157,12 @@ If `OPENROUTER_API_KEY` is not present, the network is offline, or rate limits o
 | 7 | **GDPR / Privacy Data Deletion (`/tasks` "Delete my data")** | When a student exercises their right to data deletion, `revokeAndDelete()` unlinks `AcademicRoster.discordUserId = null, verifiedAt = null` to avoid orphaned locks. |
 | 8 | **Re-running `/setup auto`** | Channel and category creation is idempotent; checks `c.name.toLowerCase() === name.toLowerCase()` before creating to prevent duplicate channels. |
 | 9 | **Manual TA Addition Preservation** | Manual slash commands (`/setup add-ta`, `/setup remove-ta`) and manual Discord role assignments remain fully supported without conflict. |
+
+---
+
+## 7. Integration notes (`chores/roster-auth`, 18 Sep 2026)
+
+* **LLM scope narrowed.** §4.3 originally posted the first 100 raw rows to OpenRouter. The merged version sends only the header row and up to three sample rows with every digit replaced by `9` and every letter by `a`, asks for `{npm, name, className, role}` column indexes, and reads the rows locally. NPMs and names never leave the server (CLAUDE.md rule 6). The call lives in `packages/core/src/llm.ts` (rule 7); `OPENROUTER_API_KEY` empty means header heuristics only.
+* **Web surface.** `/g/:guildId/roster` is a server component; upload and the gate toggle are server actions in `apps/web/src/actions/roster.ts` (TA-gated, zod-validated, 2 MB cap). There is no `/api/roster` endpoint.
+* **Idempotency.** `#verifikasi` is reused when it already exists under `🔐 GERBANG VERIFIKASI`.
+* **Unchanged from Erik's branch:** schema (`AcademicRoster`, `Guild.authEnabled/authChannelId/verifiedRoleId`), `verifyRosterMember`, the `auth:verify` button and `auth:modal`, `/setup` options, per-class categories, roster unlink on **Delete my data**.

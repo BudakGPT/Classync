@@ -42,6 +42,7 @@ Required variables:
 | `DISCORD_GUILD_ID` | Your test server ID |
 | `AUTH_SECRET` | Random string — run `openssl rand -base64 32` |
 | `WEB_URL` | Public dashboard URL for links in bot embeds (default `http://localhost:3000`) |
+| `OPENROUTER_API_KEY` | Optional. Lets roster uploads ask an OpenRouter model for the column mapping (headers + masked cells only). Empty = header heuristics |
 
 ### 3. Set up the database
 ```bash
