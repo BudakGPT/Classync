@@ -16,6 +16,7 @@ async function main() {
   await prisma.concept.deleteMany();
   await prisma.item.deleteMany();
   await prisma.student.deleteMany();
+  await prisma.academicRoster.deleteMany();
   await prisma.guild.deleteMany();
 
   // === GUILD ===

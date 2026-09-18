@@ -52,35 +52,43 @@ relay → Resolved, with the TA path as the fallback after 30 minutes. Spec: `do
 
 ---
 
-## Checkpoint 1 — T-18 (hour 6) · time: ____
+## Checkpoint 1 — T-18 (hour 6) · time: 14:30
 
 **Done (merged to `main`, verified by QA on the demo script):**
--
+- Replaced public forum threads with private concept rooms (`#help-[concept]`) grouped under per-assignment categories (`📁 [Assignment Title]`).
+- Implemented voluntary student join with single-click room entry without requiring Stuck status.
+- Implemented due-date-gated closure for concept rooms and bulk cleanup.
+- Implemented 2-minute debounced TA DMs on room activity.
+- Created `/setup auto`, `/setup form` modal dialog, roles provisioning, and persistent Classync Quick-Panel buttons in Discord channels.
 
 **In progress:**
--
+- Academic roster management, spreadsheet ingestion, and student identity verification gate.
 
 **Blocked / risks:**
--
+- None.
 
 **Flowchart or scope changes since last entry:**
-- none
+- Transitioned discussion architecture from Discord Forums to private channel concept rooms under per-assignment categories.
 
 **Next 6 hours:**
--
+- Deliver Excel/CSV roster upload on dashboard with OpenRouter LLM ingestion, Discord verification gate (`#verifikasi`), automatic role assignment (`@Verified`, `@Mahasiswa`, `@Kelas X`, `@Teaching Assistant`), and server nickname synchronization (`NPM - Nama Lengkap`).
 
 ---
 
-## Checkpoint 2 — T-12 (hour 12) · time: ____
+## Checkpoint 2 — T-12 (hour 12) · time: 16:15
 
 **Done:**
--
+- Web Dashboard Roster Management (`/g/:guildId/roster`): Upload Excel/CSV for students and TAs, toggle verification gate, view live verification metrics and connected Discord IDs.
+- AI Spreadsheet Ingestion Engine (`packages/core/src/services/rosterParser.ts`): OpenRouter API integration with free LLM models and intelligent heuristic fallback.
+- Database Schema (`AcademicRoster`): Unique constraints on `[guildId, npm]` and `[guildId, discordUserId]` to enforce 1-to-1 identity mapping and prevent impersonation.
+- Discord Verification Gate (`apps/bot/src/verificationGate.ts` & `interactions/verification.ts`): Private onboarding channel `#verifikasi`, interactive modal verification, automated role assignment, and nickname synchronization (`NPM - Nama Lengkap`).
+- Per-Class Private Categories (`apps/bot/src/classCategories.ts`): Automated generation of isolated spaces (`📁 KELAS A`, `📁 KELAS B`) with discussion and announcement channels.
 
 **In progress:**
--
+- Final demo preparation and UI polish.
 
 **Blocked / risks:**
--
+- None. All packages typecheck cleanly.
 
 **Flowchart or scope changes since last entry:**
 -

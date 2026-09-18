@@ -14,9 +14,13 @@ model Guild {
   ownerUserId           String?
   announcementChannelId String?
   taUserIds             String[] // Discord user IDs allowed to use /ta and the dashboard
+  authEnabled           Boolean   @default(false)
+  authChannelId         String?
+  verifiedRoleId        String?
   installedAt           DateTime  @default(now())
   items                 Item[]
   students              Student[]
+  roster                AcademicRoster[]
 }
 
 model Student {
@@ -189,3 +193,25 @@ model Match {
   @@index([receiverId, state])
   @@index([providerId, state])
 }
+enum RosterRole {
+  STUDENT
+  TA
+}
+
+model AcademicRoster {
+  id            String      @id @default(cuid())
+  guildId       String
+  npm           String
+  name          String
+  role          RosterRole  @default(STUDENT)
+  className     String?     // e.g. "Kelas A", "Kelas B"
+  discordUserId String?
+  verifiedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  guild         Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, npm])
+  @@unique([guildId, discordUserId])
+}
+

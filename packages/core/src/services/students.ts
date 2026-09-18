@@ -49,11 +49,20 @@ export async function giveConsent(studentId: string): Promise<Student> {
 
 /** Revoke consent and delete all personal data in this guild (statuses, requests, peer matches). */
 export async function revokeAndDelete(studentId: string): Promise<void> {
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
   await prisma.$transaction([
     prisma.topicRoomMember.deleteMany({ where: { studentId } }),
     prisma.itemStatus.deleteMany({ where: { studentId } }),
     prisma.helpRequest.deleteMany({ where: { studentId } }),
     prisma.match.deleteMany({ where: { OR: [{ receiverId: studentId }, { providerId: studentId }] } }),
+    ...(student
+      ? [
+          prisma.academicRoster.updateMany({
+            where: { guildId: student.guildId, discordUserId: student.discordUserId },
+            data: { discordUserId: null, verifiedAt: null },
+          }),
+        ]
+      : []),
     prisma.student.update({
       where: { id: studentId },
       data: { consentedAt: null, revokedAt: new Date(), helperOptIn: false },
