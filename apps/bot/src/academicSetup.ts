@@ -2,8 +2,10 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  CategoryChannel,
   ChannelType,
   EmbedBuilder,
+  OverwriteResolvable,
   PermissionFlagsBits,
   type Client,
   type Guild,
@@ -30,34 +32,16 @@ export function createQuickPanelEmbed(courseName: string, courseCode: string) {
     )
     .setColor(0x5865f2)
     .addFields(
-      {
-        name: "📋 Daftar Tugas Saya",
-        value: "Buka checklist tugas dan kelola status pengerjaan secara privat (hanya Anda yang melihat).",
-      },
-      {
-        name: "🙋 Tanya / Diskusi Konsep",
-        value: "Masuk ke private concept room bersama teman sekelas & TA untuk berdiskusi topik tugas.",
-      },
-      {
-        name: "🧑‍🏫 Antrean Asisten Dosen",
-        value: "Khusus TA & Dosen untuk meninjau pertanyaan mahasiswa yang membutuhkan klarifikasi.",
-      }
+      { name: "📋 Daftar Tugas Saya", value: "Buka checklist tugas dan kelola status pengerjaan secara privat." },
+      { name: "🙋 Tanya / Diskusi Konsep", value: "Masuk ke private concept room bersama rekan sekelas & TA." },
+      { name: "🧑‍🏫 Antrean Asisten Dosen", value: "Khusus TA & Dosen untuk meninjau pertanyaan mahasiswa." }
     )
     .setFooter({ text: "Classync · Academic Discussion & Support" });
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("task:panel-tasks")
-      .setLabel("📋 Buka Tugas Saya")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId("task:panel-ask")
-      .setLabel("🙋 Tanya / Diskusi Konsep")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId("task:panel-ta")
-      .setLabel("🧑‍🏫 Menu TA")
-      .setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("task:panel-tasks").setLabel("📋 Buka Tugas Saya").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("task:panel-ask").setLabel("🙋 Tanya / Diskusi Konsep").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("task:panel-ta").setLabel("🧑‍🏫 Menu TA").setStyle(ButtonStyle.Secondary)
   );
 
   return { embeds: [embed], components: [row] };
@@ -66,12 +50,23 @@ export function createQuickPanelEmbed(courseName: string, courseCode: string) {
 export async function ensureRole(guild: Guild, name: string, color: number, mentionable: boolean): Promise<Role> {
   const existing = guild.roles.cache.find((r) => r.name.toLowerCase() === name.toLowerCase());
   if (existing) return existing;
-  return guild.roles.create({
-    name,
-    color,
-    mentionable,
-    reason: "Classync Academic Setup",
-  });
+  return guild.roles.create({ name, color, mentionable, reason: "Classync Academic Setup" });
+}
+
+async function ensureCategory(guild: Guild, name: string, overwrites?: OverwriteResolvable[]): Promise<CategoryChannel> {
+  const existing = guild.channels.cache.find(
+    (c): c is CategoryChannel => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === name.toLowerCase()
+  );
+  if (existing) return existing;
+  return guild.channels.create({ name, type: ChannelType.GuildCategory, ...(overwrites ? { permissionOverwrites: overwrites } : {}) });
+}
+
+async function ensureTextChannel(guild: Guild, name: string, parentId: string, overwrites?: OverwriteResolvable[]): Promise<TextChannel> {
+  const existing = guild.channels.cache.find(
+    (c): c is TextChannel => c.type === ChannelType.GuildText && c.parentId === parentId && c.name.toLowerCase() === name.toLowerCase()
+  );
+  if (existing) return existing;
+  return guild.channels.create({ name, type: ChannelType.GuildText, parent: parentId, ...(overwrites ? { permissionOverwrites: overwrites } : {}) });
 }
 
 export async function setupAcademicServer(
@@ -89,12 +84,9 @@ export async function setupAcademicServer(
   const discordGuild = await client.guilds.fetch(discordGuildId);
   const dbGuild = await getOrCreateGuild(discordGuildId, discordGuild.name);
 
-  if (!dbGuild.ownerUserId) {
-    await claimGuildOwnership(discordGuildId, callerUserId);
-  }
+  if (!dbGuild.ownerUserId) await claimGuildOwnership(discordGuildId, callerUserId);
   await addTaUser(discordGuildId, callerUserId);
 
-  // 1. Roles
   const lecturerRole = await ensureRole(discordGuild, "Dosen Pengampu", 0xe67e22, true);
   const taRole = await ensureRole(discordGuild, "Teaching Assistant", 0x3498db, true);
   const studentRole = await ensureRole(discordGuild, "Mahasiswa", 0x2ecc71, false);
@@ -105,105 +97,73 @@ export async function setupAcademicServer(
   const everyoneId = discordGuild.roles.everyone.id;
   const botId = client.user?.id;
 
-  // 2. Auth Verification Gate (if enabled)
   const authActive = params.enableAuth ?? dbGuild.authEnabled;
   let verifiedRole: Role | undefined;
 
   if (authActive) {
     verifiedRole = await ensureRole(discordGuild, "Verified", 0x1abc9c, false);
     const verifyChannel = await setupVerificationChannel(discordGuild, verifiedRole, botId);
-    await setGuildAuth(discordGuildId, {
-      authEnabled: true,
-      verifiedRoleId: verifiedRole.id,
-      authChannelId: verifyChannel.id,
-    });
+    await setGuildAuth(discordGuildId, { authEnabled: true, verifiedRoleId: verifiedRole.id, authChannelId: verifyChannel.id });
   }
 
-  // 3. Category: INFORMASI AKADEMIK
-  const infoCategory = await discordGuild.channels.create({
-    name: "📢 INFORMASI AKADEMIK",
-    type: ChannelType.GuildCategory,
-    permissionOverwrites: authActive && verifiedRole
-      ? [
-          { id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: verifiedRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
-        ]
-      : [{ id: everyoneId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] }],
-  });
+  const infoCategory = await ensureCategory(
+    discordGuild,
+    "📢 INFORMASI AKADEMIK",
+    authActive && verifiedRole
+      ? [{ id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] }, { id: verifiedRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] }]
+      : [{ id: everyoneId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] }]
+  );
 
-  const announceChannel = await discordGuild.channels.create({
-    name: "pengumuman-tugas",
-    type: ChannelType.GuildText,
-    parent: infoCategory.id,
-    permissionOverwrites: [
-      { id: everyoneId, deny: [PermissionFlagsBits.SendMessages] },
-      ...(botId ? [{ id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageMessages] }] : []),
-      { id: taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-      { id: lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-    ],
-  });
+  const announceChannel = await ensureTextChannel(discordGuild, "pengumuman-tugas", infoCategory.id, [
+    { id: everyoneId, deny: [PermissionFlagsBits.SendMessages] },
+    ...(botId ? [{ id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageMessages] }] : []),
+    { id: taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+    { id: lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+  ]);
   await setAnnouncementChannel(discordGuildId, announceChannel.id);
 
-  await discordGuild.channels.create({
-    name: "jadwal-kuliah",
-    type: ChannelType.GuildText,
-    parent: infoCategory.id,
-    permissionOverwrites: [
-      { id: everyoneId, deny: [PermissionFlagsBits.SendMessages] },
-      { id: taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-      { id: lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-    ],
-  });
+  await ensureTextChannel(discordGuild, "jadwal-kuliah", infoCategory.id, [
+    { id: everyoneId, deny: [PermissionFlagsBits.SendMessages] },
+    { id: taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+    { id: lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+  ]);
 
-  // 4. Category: DISKUSI KELAS
-  const discussionCategory = await discordGuild.channels.create({
-    name: "💬 DISKUSI UMUM",
-    type: ChannelType.GuildCategory,
-    permissionOverwrites: authActive && verifiedRole
-      ? [
-          { id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: verifiedRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-        ]
-      : [{ id: everyoneId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }],
-  });
+  const discussionCategory = await ensureCategory(
+    discordGuild,
+    "💬 DISKUSI UMUM",
+    authActive && verifiedRole
+      ? [{ id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] }, { id: verifiedRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }]
+      : [{ id: everyoneId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }]
+  );
 
-  const qaChannel = await discordGuild.channels.create({
-    name: "tanya-jawab",
-    type: ChannelType.GuildText,
-    parent: discussionCategory.id,
-  });
+  const qaChannel = await ensureTextChannel(discordGuild, "tanya-jawab", discussionCategory.id);
+  await ensureTextChannel(discordGuild, "lounge", discussionCategory.id);
 
-  await discordGuild.channels.create({
-    name: "lounge",
-    type: ChannelType.GuildText,
-    parent: discussionCategory.id,
-  });
+  const staffCategory = await ensureCategory(discordGuild, "🔒 RUANG TA & DOSEN", [
+    { id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] },
+    ...(botId ? [{ id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] }] : []),
+    { id: taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+  ]);
 
-  // 5. Category: RUANG TA & DOSEN
-  const staffCategory = await discordGuild.channels.create({
-    name: "🔒 RUANG TA & DOSEN",
-    type: ChannelType.GuildCategory,
-    permissionOverwrites: [
-      { id: everyoneId, deny: [PermissionFlagsBits.ViewChannel] },
-      ...(botId ? [{ id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] }] : []),
-      { id: taRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-      { id: lecturerRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    ],
-  });
+  await ensureTextChannel(discordGuild, "ta-briefing", staffCategory.id);
+  await ensureTextChannel(discordGuild, "ta-bot-alerts", staffCategory.id);
 
-  await discordGuild.channels.create({ name: "ta-briefing", type: ChannelType.GuildText, parent: staffCategory.id });
-  await discordGuild.channels.create({ name: "ta-bot-alerts", type: ChannelType.GuildText, parent: staffCategory.id });
-
-  // 6. Per-class Categories (from uploaded Roster)
   const distinctClasses = await getDistinctClasses(dbGuild.id);
   if (distinctClasses.length > 0) {
     await setupClassroomCategories(discordGuild, distinctClasses, { taRole, lecturerRole, botId });
   }
 
-  // 7. Send Quick-Panels
   const panel = createQuickPanelEmbed(params.courseName, params.courseCode);
-  await announceChannel.send(panel).catch(() => undefined);
-  await qaChannel.send(panel).catch(() => undefined);
+  const announceMsgs = await announceChannel.messages.fetch({ limit: 5 }).catch(() => null);
+  if (!announceMsgs?.some((m) => m.embeds.some((e) => e.title?.includes("Panel Akademik")))) {
+    await announceChannel.send(panel).catch(() => undefined);
+  }
+
+  const qaMsgs = await qaChannel.messages.fetch({ limit: 5 }).catch(() => null);
+  if (!qaMsgs?.some((m) => m.embeds.some((e) => e.title?.includes("Panel Akademik")))) {
+    await qaChannel.send(panel).catch(() => undefined);
+  }
 
   return { announcementChannel: announceChannel, taRole, studentRole, lecturerRole, verifiedRole };
 }

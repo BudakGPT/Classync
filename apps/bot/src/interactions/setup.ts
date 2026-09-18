@@ -110,9 +110,6 @@ export async function handleSetupCommand(interaction: ChatInputCommandInteractio
 // ── /setup form ───────────────────────────────────────────────────────
 
 async function handleForm(interaction: ChatInputCommandInteraction): Promise<void> {
-  if (isAlreadySetUp(interaction)) {
-    return void await showResetConfirmation(interaction, interaction.guild!.name, "KELAS-A", true);
-  }
   const modal = new ModalBuilder().setCustomId("setup:academic-modal").setTitle("Setup Server Akademik");
   modal.addComponents(
     new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -140,14 +137,15 @@ async function handleAuto(interaction: ChatInputCommandInteraction): Promise<voi
   const courseName = interaction.options.getString("course_name") || interaction.guild!.name;
   const courseCode = interaction.options.getString("course_code") || "KELAS-A";
   const enableAuthOpt = interaction.options.getBoolean("enable_auth");
+  const enableAuth = enableAuthOpt ?? true;
 
   if (isAlreadySetUp(interaction)) {
-    return void await showResetConfirmation(interaction, courseName, courseCode, enableAuthOpt ?? true);
+    return void await showResetConfirmation(interaction, courseName, courseCode, enableAuth);
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await setupAcademicServer(interaction.client, interaction.guildId!, interaction.user.id, {
-    courseName, courseCode, enableAuth: enableAuthOpt ?? undefined,
+    courseName, courseCode, enableAuth,
   });
 
   const dbGuild = await getGuildByDiscordId(interaction.guildId!);
@@ -169,6 +167,15 @@ export async function handleSetupModal(interaction: ModalSubmitInteraction): Pro
     if (v === "tidak" || v === "no" || v === "false") enableAuth = false;
   } catch { /* optional field */ }
 
+  if (isAlreadySetUp(interaction)) {
+    setPendingReset(interaction.guildId, interaction.user.id, { courseName, courseCode, enableAuth });
+    await interaction.editReply({
+      embeds: [buildResetWarningEmbed(courseName, courseCode)],
+      components: [confirmRow("first")],
+    });
+    return;
+  }
+
   const result = await setupAcademicServer(interaction.client, interaction.guildId, interaction.user.id, {
     courseName, courseCode, enableAuth,
   });
@@ -188,7 +195,7 @@ async function showResetConfirmation(
 ): Promise<void> {
   setPendingReset(interaction.guildId!, interaction.user.id, { courseName, courseCode, enableAuth });
   await interaction.reply({
-    embeds: [buildResetWarningEmbed()],
+    embeds: [buildResetWarningEmbed(courseName, courseCode)],
     components: [confirmRow("first")],
     flags: MessageFlags.Ephemeral,
   });

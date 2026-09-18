@@ -30,7 +30,10 @@ function isBotManagedCategory(name: string): boolean {
  * Preserves the bot's own managed role and all user-created resources.
  * Returns counts for the confirmation embed.
  */
-export async function teardownAcademicChannels(guild: Guild): Promise<{ deletedChannels: number; deletedRoles: number }> {
+export async function teardownAcademicChannels(
+  guild: Guild,
+  skipChannelId?: string
+): Promise<{ deletedChannels: number; deletedRoles: number }> {
   let deletedChannels = 0;
   let deletedRoles = 0;
 
@@ -41,12 +44,19 @@ export async function teardownAcademicChannels(guild: Guild): Promise<{ deletedC
 
   for (const category of categories.values()) {
     const children = guild.channels.cache.filter((c) => c.parentId === category.id);
+    let containsSkipped = false;
     for (const child of children.values()) {
+      if (skipChannelId && child.id === skipChannelId) {
+        containsSkipped = true;
+        continue;
+      }
       await child.delete("Classync reset").catch(() => undefined);
       deletedChannels += 1;
     }
-    await category.delete("Classync reset").catch(() => undefined);
-    deletedChannels += 1;
+    if (!containsSkipped) {
+      await category.delete("Classync reset").catch(() => undefined);
+      deletedChannels += 1;
+    }
   }
 
   // 2. Delete Classync-created roles (skip bot's own managed role)
