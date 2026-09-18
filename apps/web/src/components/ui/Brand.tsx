@@ -1,37 +1,29 @@
-import Image from "next/image";
 import type { SVGProps } from "react";
 import { cn } from "@/lib/utils";
+import { MARK_LIGHT_PATH, MARK_PRIMARY_PATH, MARK_VIEWBOX } from "./brandPaths";
 
-/** Classync mark: official mark icon. */
-export function ClassyncMark({ size = 36, className }: { size?: number; className?: string }) {
+/** Classync mark: two speech bubbles in rotation, from the official logo. */
+export function ClassyncMark({ size = 32, className }: { size?: number; className?: string }) {
   return (
-    <Image
-      src="/mark.png"
-      alt="Classync"
+    <svg
       width={size}
       height={size}
-      style={{ width: `${size}px`, height: `${size}px` }}
-      className={cn("shrink-0 object-contain drop-shadow-sm", className)}
-      priority
-    />
+      viewBox={MARK_VIEWBOX}
+      className={className}
+      role="img"
+      aria-label="Classync"
+    >
+      <path fill="var(--color-brand-500)" fillRule="evenodd" d={MARK_PRIMARY_PATH} />
+      <path fill="var(--color-brand-400)" fillRule="evenodd" d={MARK_LIGHT_PATH} />
+    </svg>
   );
 }
 
-/** Official horizontal Classync logo. */
-export function Logo({ className, size = 36 }: { className?: string; size?: number }) {
-  const h = size;
-  const w = Math.round(h * 3);
+export function Logo({ className, size = 32 }: { className?: string; size?: number }) {
   return (
-    <span className={cn("inline-flex items-center", className)}>
-      <Image
-        src="/logo.png"
-        alt="Classync"
-        width={w}
-        height={h}
-        style={{ height: `${h}px`, width: "auto" }}
-        className="object-contain"
-        priority
-      />
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
+      <ClassyncMark size={size} className="shrink-0" />
+      <span className="text-[17px] font-extrabold tracking-tight text-brand-900">Classync</span>
     </span>
   );
 }

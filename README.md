@@ -1,4 +1,6 @@
-# Classync
+<p align="center">
+  <img src="asset/logo.png" alt="Classync" width="420">
+</p>
 
 > Early warning for students about to fall behind — before the grade does.
 

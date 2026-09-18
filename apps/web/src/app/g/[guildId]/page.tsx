@@ -8,9 +8,11 @@ import {
   getHeatMapData,
   getOpenRequestCount,
   getPeerMetrics,
+  getSilentRisk,
 } from "@classync/core";
 import { DifficultyBadge, RoomBadge } from "@/components/badges";
 import { HeatMap } from "@/components/HeatMap";
+import { SilentRisk } from "@/components/SilentRisk";
 import { Card, CardHeader, EmptyState, PageHeader, StatCard } from "@/components/ui";
 import { requireTaGuild } from "@/lib/session";
 
@@ -20,12 +22,12 @@ interface Props {
 
 const PEER_FLOOR = "Privacy floor: fewer than 5 peer matches";
 
-/** W2: tiles, peer tiles, heat map, difficulty list. Refreshed every 5 s by the layout poller. */
+/** W2: tiles, peer tiles, silent-risk card, heat map, difficulty list. Refreshed every 5 s by the layout poller. */
 export default async function GuildOverviewPage({ params }: Props) {
   const { guildId } = await params;
   const { guild } = await requireTaGuild(guildId);
 
-  const [items, students, openRequests, delivered, difficulty, heatMap, peer] = await Promise.all([
+  const [items, students, openRequests, delivered, difficulty, heatMap, peer, silent] = await Promise.all([
     countItemsByGuild(guild.id),
     getConsentedStudentCount(guild.id),
     getOpenRequestCount(guild.id),
@@ -33,6 +35,7 @@ export default async function GuildOverviewPage({ params }: Props) {
     getDifficultyList(guild.id),
     getHeatMapData(guild.id),
     getPeerMetrics(guild.id),
+    getSilentRisk(guild.id),
   ]);
   const queue = difficulty.filter((d) => d.open > 0 || d.topicRoom !== null);
 
@@ -63,6 +66,10 @@ export default async function GuildOverviewPage({ params }: Props) {
           footer="From Stuck to a classmate accepting the offer."
         />
       </section>
+
+      <div className="mt-6">
+        <SilentRisk summary={silent} guildId={guild.id} />
+      </div>
 
       <Card className="mt-6">
         <CardHeader icon={TrendingUp} tone="orange" title="Stuck reports, last 7 days" subtitle="Per task, per Jakarta day. Counts only." />
