@@ -1,0 +1,6 @@
+/* Analytics-only motion (global reduced-motion rule in index.css still applies). */
+@keyframes an-reveal { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 -10px 0 0) } }
+.an-reveal { animation: an-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) both }
+
+@keyframes an-pop { from { opacity: 0; scale: 0.3 } to { opacity: 1; scale: 1 } }
+.an-pop { animation: an-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; transform-box: fill-box; transform-origin: center }

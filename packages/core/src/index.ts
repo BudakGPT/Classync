@@ -1,16 +1,16 @@
 // @classync/core — public API
 // All DB access must go through these exports. Never import @prisma/client directly from apps/.
 
-export { prisma } from "./db.js";
+export { prisma } from "./db";
 
 // Services
-export * from "./services/guilds.js";
-export * from "./services/items.js";
-export * from "./services/status.js";
-export * from "./services/concepts.js";
-export * from "./services/requests.js";
-export * from "./services/answers.js";
-export * from "./services/students.js";
+export * from "./services/guilds";
+export * from "./services/items";
+export * from "./services/status";
+export * from "./services/concepts";
+export * from "./services/requests";
+export * from "./services/answers";
+export * from "./services/students";
 
 // LLM
-export * from "./llm.js";
+export * from "./llm";
