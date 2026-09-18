@@ -80,6 +80,25 @@ export default async function GuildOverviewPage({ params }: Props) {
         ))}
       </section>
 
+      {/* Roster & Verification Management Callout */}
+      <section className="rounded-xl border border-indigo-900/50 bg-indigo-950/30 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🎓</span>
+            <h2 className="text-base font-bold text-white">Data Mahasiswa, Asdos & Verifikasi NPM</h2>
+          </div>
+          <p className="text-xs text-indigo-200/70">
+            Upload file Excel/CSV data mahasiswa & asisten dosen, aktifkan gerbang verifikasi Discord, dan sinkronkan role kelas.
+          </p>
+        </div>
+        <Link
+          href={`/g/${guild.id}/roster`}
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold self-start sm:self-center transition shrink-0"
+        >
+          Kelola Roster & Kelas →
+        </Link>
+      </section>
+
       {/* Heat map */}
       {heatMap.length > 0 && (
         <section>

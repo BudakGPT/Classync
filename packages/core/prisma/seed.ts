@@ -7,12 +7,15 @@ async function main() {
   console.log("🌱 Seeding database...");
 
   // Clean slate
+  await prisma.topicRoomMember.deleteMany();
+  await prisma.topicRoom.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.helpRequest.deleteMany();
   await prisma.itemStatus.deleteMany();
   await prisma.concept.deleteMany();
   await prisma.item.deleteMany();
   await prisma.student.deleteMany();
+  await prisma.academicRoster.deleteMany();
   await prisma.guild.deleteMany();
 
   // === GUILD ===

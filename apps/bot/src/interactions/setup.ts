@@ -116,6 +116,16 @@ export async function handleSetupCommand(interaction: ChatInputCommandInteractio
           .setPlaceholder("misal: CS101-A")
           .setRequired(true)
           .setMaxLength(30)
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId("auth_enabled")
+          .setLabel("Aktifkan Verifikasi Mahasiswa (NPM)?")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("ya / tidak (default: ya)")
+          .setRequired(false)
+          .setValue("ya")
+          .setMaxLength(10)
       )
     );
 
@@ -127,10 +137,12 @@ export async function handleSetupCommand(interaction: ChatInputCommandInteractio
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const courseName = interaction.options.getString("course_name") || interaction.guild.name;
     const courseCode = interaction.options.getString("course_code") || "KELAS-A";
+    const enableAuthOpt = interaction.options.getBoolean("enable_auth");
 
     const result = await setupAcademicServer(interaction.client, interaction.guildId, interaction.user.id, {
       courseName,
       courseCode,
+      enableAuth: enableAuthOpt ?? undefined,
     });
 
     const dbGuild = await getGuildByDiscordId(interaction.guildId);
@@ -196,10 +208,20 @@ export async function handleSetupModal(interaction: ModalSubmitInteraction): Pro
 
   const courseName = interaction.fields.getTextInputValue("course_name");
   const courseCode = interaction.fields.getTextInputValue("course_code");
+  let enableAuth = true;
+  try {
+    const authVal = interaction.fields.getTextInputValue("auth_enabled")?.toLowerCase().trim();
+    if (authVal === "tidak" || authVal === "no" || authVal === "false") {
+      enableAuth = false;
+    }
+  } catch {
+    // optional field
+  }
 
   const result = await setupAcademicServer(interaction.client, interaction.guildId, interaction.user.id, {
     courseName,
     courseCode,
+    enableAuth,
   });
 
   const dbGuild = await getGuildByDiscordId(interaction.guildId);

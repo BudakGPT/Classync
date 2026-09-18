@@ -12,9 +12,11 @@ export * from "./services/requests";
 export * from "./services/answers";
 export * from "./services/topicRooms";
 export * from "./services/students";
+export * from "./services/roster";
+export * from "./services/rosterParser";
 
 // Re-export Prisma types needed by web
-export type { ItemKind, StatusState, RequestState, TopicRoomState } from "@prisma/client";
+export type { ItemKind, StatusState, RequestState, TopicRoomState, RosterRole, AcademicRoster } from "@prisma/client";
 
 // LLM
 export * from "./llm";

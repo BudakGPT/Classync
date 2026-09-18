@@ -13,6 +13,7 @@ import { requiredEnv } from "./config.js";
 import { handleTaskInteraction } from "./interactions/tasks.js";
 import { handleReminderInteraction } from "./interactions/reminders.js";
 import { handleSetupModal } from "./interactions/setup.js";
+import { handleVerificationButton, handleVerificationModal } from "./interactions/verification.js";
 import { handleTaAutocomplete } from "./interactions/ta.js";
 import { startDeliverJob } from "./jobs/deliver.js";
 import { startReminderJob } from "./jobs/reminders.js";
@@ -63,11 +64,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton()) {
+      if (await handleVerificationButton(interaction)) return;
       if (await handleTaskInteraction(interaction)) return;
       await handleReminderInteraction(interaction);
       return;
     }
     if (interaction.isModalSubmit()) {
+      if (await handleVerificationModal(interaction)) return;
       if (interaction.customId === "setup:academic-modal") {
         await handleSetupModal(interaction);
         return;
