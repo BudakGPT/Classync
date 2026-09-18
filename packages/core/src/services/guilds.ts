@@ -34,10 +34,49 @@ export async function addTaUser(
   });
 }
 
+/** Atomically claims an unowned guild. Returns the existing owner when already claimed. */
+export async function claimGuildOwnership(
+  discordGuildId: string,
+  discordUserId: string
+): Promise<{ guild: Guild; claimed: boolean }> {
+  const result = await prisma.guild.updateMany({
+    where: { discordGuildId, ownerUserId: null },
+    data: { ownerUserId: discordUserId },
+  });
+  const guild = await prisma.guild.findUniqueOrThrow({ where: { discordGuildId } });
+  return { guild, claimed: result.count === 1 };
+}
+
+export async function transferGuildOwnership(
+  discordGuildId: string,
+  discordUserId: string
+): Promise<Guild> {
+  return prisma.guild.update({
+    where: { discordGuildId },
+    data: { ownerUserId: discordUserId },
+  });
+}
+
+export async function removeTaUser(
+  discordGuildId: string,
+  discordUserId: string
+): Promise<Guild> {
+  const guild = await prisma.guild.findUniqueOrThrow({ where: { discordGuildId } });
+  if (!guild.taUserIds.includes(discordUserId)) return guild;
+  return prisma.guild.update({
+    where: { discordGuildId },
+    data: { taUserIds: guild.taUserIds.filter((id) => id !== discordUserId) },
+  });
+}
+
 export async function getGuildByDiscordId(
   discordGuildId: string
 ): Promise<Guild | null> {
   return prisma.guild.findUnique({ where: { discordGuildId } });
+}
+
+export async function getGuildById(id: string): Promise<Guild | null> {
+  return prisma.guild.findUnique({ where: { id } });
 }
 
 /** Returns all guilds where the given Discord user ID is a TA. */
@@ -53,4 +92,29 @@ export async function isTa(
 ): Promise<boolean> {
   const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
   return guild?.taUserIds.includes(discordUserId) ?? false;
+}
+
+/**
+ * Wipes all guild-related data (roster, items→concepts→answers→rooms, students)
+ * but preserves the Guild row itself (owner, TAs stay).
+ * Resets auth-related fields so a fresh /setup can recreate them.
+ */
+export async function resetGuildData(discordGuildId: string): Promise<void> {
+  const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
+  if (!guild) return;
+
+  await prisma.$transaction([
+    prisma.academicRoster.deleteMany({ where: { guildId: guild.id } }),
+    prisma.item.deleteMany({ where: { guildId: guild.id } }),
+    prisma.student.deleteMany({ where: { guildId: guild.id } }),
+    prisma.guild.update({
+      where: { id: guild.id },
+      data: {
+        announcementChannelId: null,
+        authChannelId: null,
+        authEnabled: false,
+        verifiedRoleId: null,
+      },
+    }),
+  ]);
 }

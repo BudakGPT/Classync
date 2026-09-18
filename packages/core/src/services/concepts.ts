@@ -1,17 +1,21 @@
 import { prisma } from "../db";
 import type { Concept } from "@prisma/client";
+import { z } from "zod";
 
 /** Normalize a label: trim, lowercase, strip punctuation. */
 export function normalizeLabel(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
 }
 
+const conceptLabelSchema = z.string().trim().min(1).max(80);
+
 /** Get or create a concept for an item+label pair. */
 export async function getOrCreateConcept(
   itemId: string,
   rawLabel: string
 ): Promise<Concept> {
-  const label = normalizeLabel(rawLabel);
+  const label = normalizeLabel(conceptLabelSchema.parse(rawLabel));
+  if (label.length === 0) throw new Error("Concept label must contain letters or numbers.");
   return prisma.concept.upsert({
     where: { itemId_label: { itemId, label } },
     update: {},
@@ -39,7 +43,8 @@ export async function getStuckCount(conceptId: string): Promise<number | null> {
 }
 
 /**
- * Difficulty list for the TA dashboard: concepts ranked by open help-request count.
+ * Difficulty list for the TA dashboard: concepts ranked by open help-request count,
+ * with the room summary so the queue can link to Discord. No student rows.
  */
 export async function getDifficultyList(guildId: string) {
   const concepts = await prisma.concept.findMany({
@@ -47,6 +52,7 @@ export async function getDifficultyList(guildId: string) {
     include: {
       item: { select: { id: true, title: true, dueAt: true } },
       helpRequests: { select: { state: true } },
+      topicRoom: { select: { state: true, channelId: true, _count: { select: { members: true } } } },
     },
   });
 
@@ -56,7 +62,10 @@ export async function getDifficultyList(guildId: string) {
       const answered = c.helpRequests.filter((r) => r.state === "ANSWERED").length;
       const band =
         open >= 5 ? ("red" as const) : open >= 3 ? ("yellow" as const) : ("green" as const);
-      return { concept: c, item: c.item, open, answered, band };
+      const topicRoom = c.topicRoom
+        ? { state: c.topicRoom.state, channelId: c.topicRoom.channelId, memberCount: c.topicRoom._count.members }
+        : null;
+      return { concept: { id: c.id, label: c.label }, item: c.item, open, answered, band, topicRoom };
     })
     .sort((a, b) => b.open - a.open);
 }
@@ -76,7 +85,7 @@ export async function getHeatMapData(guildId: string) {
 
   const map = new Map<string, { itemTitle: string; counts: Map<string, number> }>();
   for (const s of statuses) {
-    const day = s.updatedAt.toISOString().slice(0, 10);
+    const day = jakartaDay(s.updatedAt);
     if (!map.has(s.itemId)) {
       map.set(s.itemId, { itemTitle: s.item.title, counts: new Map() });
     }
@@ -89,4 +98,9 @@ export async function getHeatMapData(guildId: string) {
     itemTitle,
     days: Array.from(counts.entries()).map(([date, count]) => ({ date, count })),
   }));
+}
+
+/** Calendar day in Asia/Jakarta (UTC+7, no DST) as YYYY-MM-DD. Shared by the heat map query and its columns. */
+export function jakartaDay(date: Date): string {
+  return new Date(date.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }

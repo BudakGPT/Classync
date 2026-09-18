@@ -7,12 +7,16 @@ async function main() {
   console.log("🌱 Seeding database...");
 
   // Clean slate
+  await prisma.match.deleteMany();
+  await prisma.topicRoomMember.deleteMany();
+  await prisma.topicRoom.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.helpRequest.deleteMany();
   await prisma.itemStatus.deleteMany();
   await prisma.concept.deleteMany();
   await prisma.item.deleteMany();
   await prisma.student.deleteMany();
+  await prisma.academicRoster.deleteMany();
   await prisma.guild.deleteMany();
 
   // === GUILD ===
@@ -145,11 +149,28 @@ async function main() {
     )
   );
 
+  // Item 1 silent-risk demo: the 5 students with no status on item 1 (indices 6, 7, 8, 10, 11)
+  // were sent the 24 h reminder and never tapped anything → "5 quiet · 5 ignored a reminder".
+  const quietStudents = [6, 7, 8, 10, 11].map((i) => students[i]);
+  await Promise.all(
+    quietStudents.map((student) =>
+      prisma.itemStatus.create({
+        data: {
+          itemId: item1.id,
+          studentId: student.id,
+          state: StatusState.NONE,
+          remindedAt: subHours(new Date(), 6),
+        },
+      })
+    )
+  );
+
   // Item 3: no statuses (empty state demo)
 
   // === HELP REQUESTS ===
   // concept1: 3 OPEN requests (including 1 real account so dashboard shows real name)
   const requesters = [students[0], students[1], students[2]]; // first is real TA account
+  const requesterNames = ["Mahasiswa Satu", "Mahasiswa Dua", "Mahasiswa Tiga"];
   await Promise.all(
     requesters.map((student) =>
       prisma.helpRequest.create({
@@ -157,6 +178,7 @@ async function main() {
           conceptId: concept1.id,
           studentId: student.id,
           state: RequestState.OPEN,
+          displayName: requesterNames[requesters.indexOf(student)],
           createdAt: subHours(new Date(), requesters.indexOf(student) * 2),
         },
       })
@@ -179,6 +201,7 @@ async function main() {
       conceptId: concept2.id,
       studentId: students[9].id,
       state: RequestState.ANSWERED,
+      displayName: "Mahasiswa Sepuluh",
     },
   });
 
@@ -199,6 +222,7 @@ async function main() {
   console.log(`   concept1 (soal nomor 2): 6 stuck, 3 open requests`);
   console.log(`   concept2 (cara submit): 1 stuck, 1 answered`);
   console.log(`   concept3 (install docker): 3 stuck (below privacy floor)`);
+  console.log(`   item1 silent risk: 5 quiet, all 5 reminded (dashboard "Gone quiet" card)`);
 }
 
 main()

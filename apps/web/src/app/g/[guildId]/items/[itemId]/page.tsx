@@ -1,70 +1,87 @@
-import { auth } from "@/auth";
-import { getItemById, getItemAggregate } from "@classync/core";
-import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ChevronRight, CircleCheck, FolderOpen, LifeBuoy, Loader, Lock, MessagesSquare } from "lucide-react";
+import { getItemAggregate, getItemById, getItemConceptSummaries } from "@classync/core";
+import { KindBadge, RoomBadge } from "@/components/badges";
+import { Badge, ButtonLink, Card, CardHeader, EmptyState, PageHeader, StatCard } from "@/components/ui";
+import { dueLabel } from "@/lib/format";
+import { requireTaGuild } from "@/lib/session";
+import { plural } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ guildId: string; itemId: string }>;
 }
 
-export default async function ItemAggregatePage({ params }: Props) {
+/** W4: done / in progress / stuck counts behind the privacy floor, plus the task's concept rooms. */
+export default async function ItemPage({ params }: Props) {
   const { guildId, itemId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) redirect("/");
-
-  const { prisma } = await import("@classync/core");
-  const guild = await prisma.guild.findUnique({ where: { id: guildId } });
-  if (!guild) notFound();
-  if (!guild.taUserIds.includes(session.user.id)) redirect("/guilds");
+  const { guild } = await requireTaGuild(guildId);
 
   const item = await getItemById(itemId);
-  if (!item) notFound();
+  if (!item || item.guildId !== guild.id) notFound();
 
-  const aggregate = await getItemAggregate(itemId);
+  const [aggregate, concepts] = await Promise.all([getItemAggregate(item.id), getItemConceptSummaries(item.id)]);
 
   return (
-    <main className="mx-auto max-w-xl p-6 space-y-8">
-      <div>
-        <Link href={`/g/${guildId}`} className="text-sm text-gray-500 hover:text-white transition-colors">
-          ← Back to overview
-        </Link>
-        <h1 className="text-2xl font-bold mt-2">{item.title}</h1>
-        <p className="text-gray-400 text-sm">
-          {item.dueAt
-            ? `Due: ${new Date(item.dueAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}`
-            : "No deadline"}
-          {" · "}
-          {item.kind}
-        </p>
-      </div>
+    <>
+      <PageHeader
+        eyebrow={
+          <>
+            <KindBadge kind={item.kind} />
+            {item.discordCategoryId && <Badge tone="brand" icon={FolderOpen}>Discord category provisioned</Badge>}
+          </>
+        }
+        title={item.title}
+        subtitle={dueLabel(item.dueAt)}
+        actions={<ButtonLink href={`/g/${guild.id}/tasks`} variant="ghost" size="sm">All tasks</ButtonLink>}
+      />
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">📊 Student Status Aggregate</h2>
-
+      <section aria-label="Status aggregate">
         {aggregate === null ? (
-          <div className="rounded-xl bg-gray-800 p-6 text-center">
-            <p className="text-2xl mb-2">🔒</p>
-            <p className="font-semibold">Not enough reports yet</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Privacy floor: at least 5 students must have a status before aggregate is shown.
-            </p>
-          </div>
+          <Card>
+            <EmptyState
+              icon={Lock}
+              tone="amber"
+              title="Not enough reports yet (privacy floor: 5)"
+              description="Counts appear once at least five students have set any status on this task. Nothing is shown below that."
+            />
+          </Card>
         ) : (
           <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: "Done", value: aggregate["DONE"] ?? 0, color: "bg-green-900/40 border-green-700", emoji: "✅" },
-              { label: "In Progress", value: aggregate["IN_PROGRESS"] ?? 0, color: "bg-blue-900/40 border-blue-700", emoji: "🔵" },
-              { label: "Stuck", value: aggregate["STUCK"] ?? 0, color: "bg-red-900/40 border-red-700", emoji: "🔴" },
-            ].map((s) => (
-              <div key={s.label} className={`rounded-xl border p-5 flex flex-col gap-1 ${s.color}`}>
-                <span className="text-2xl">{s.emoji}</span>
-                <span className="text-3xl font-bold">{s.value}</span>
-                <span className="text-xs text-gray-400">{s.label}</span>
-              </div>
-            ))}
+            <StatCard label="Done" value={aggregate.DONE ?? 0} icon={CircleCheck} tone="emerald" />
+            <StatCard label="In progress" value={aggregate.IN_PROGRESS ?? 0} icon={Loader} tone="sky" />
+            <StatCard label="Stuck" value={aggregate.STUCK ?? 0} icon={LifeBuoy} tone="rose" />
           </div>
         )}
       </section>
-    </main>
+
+      <Card className="mt-6">
+        <CardHeader
+          icon={MessagesSquare}
+          tone="violet"
+          title="Concepts and rooms"
+          subtitle="Rooms are private Discord channels students opt into. Close or reopen them with /ta close-room."
+        />
+        {concepts.length === 0 ? (
+          <EmptyState icon={MessagesSquare} title="No concepts reported yet" description="Concepts appear when a student taps Stuck or opens a room on this task." />
+        ) : (
+          <ul className="mt-4 divide-y divide-line border-t border-line">
+            {concepts.map((c) => (
+              <li key={c.id}>
+                <Link href={`/g/${guild.id}/concepts/${c.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition hover:bg-subtle/60">
+                  <div className="min-w-0 flex-1 basis-56">
+                    <p className="truncate text-[14px] font-semibold text-ink">{c.label}</p>
+                    <p className="text-xs text-ink-3">{plural(c.openRequests, "open request")}</p>
+                  </div>
+                  {c.answered && <Badge tone="emerald" icon={CircleCheck}>Answered</Badge>}
+                  <RoomBadge room={c.topicRoom} discordGuildId={guild.discordGuildId} />
+                  <ChevronRight className="size-4 text-ink-3" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </>
   );
 }

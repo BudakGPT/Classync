@@ -1,5 +1,14 @@
 import { prisma } from "../db";
 import type { Item, ItemKind } from "@prisma/client";
+import { z } from "zod";
+
+const itemInputSchema = z.object({
+  guildId: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2_000).optional(),
+  dueAt: z.date().optional(),
+  kind: z.enum(["ASSIGNMENT", "QUIZ", "EXAM", "READING"]).optional(),
+});
 
 export async function createItem(params: {
   guildId: string;
@@ -7,17 +16,48 @@ export async function createItem(params: {
   description?: string;
   dueAt?: Date;
   kind?: ItemKind;
-  sourceMessageId?: string;
 }): Promise<Item> {
-  return prisma.item.create({ data: params });
+  return prisma.item.create({ data: itemInputSchema.parse(params) });
 }
 
+/** Parses an unambiguous Jakarta-local due value and returns its UTC instant. */
+export function parseJakartaDueAt(raw: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(raw.trim());
+  if (!match) return null;
+  const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw] = match;
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  const hour = hourRaw === undefined ? 23 : Number(hourRaw);
+  const minute = minuteRaw === undefined ? 59 : Number(minuteRaw);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth || hour > 23 || minute > 59) return null;
+  return new Date(Date.UTC(year, month - 1, day, hour - 7, minute));
+}
+
+export async function getItemsDueWithin(from: Date, until: Date): Promise<Item[]> {
+  return prisma.item.findMany({ where: { dueAt: { gte: from, lte: until } } });
+}
+
+/** Student-facing list: newest first, max 10, past-due items hidden. */
 export async function getItemsByGuild(guildId: string): Promise<Item[]> {
   return prisma.item.findMany({
-    where: { guildId },
+    // Keep undated items, but do not offer students tasks after their deadline.
+    where: {
+      guildId,
+      OR: [
+        { dueAt: null },
+        { dueAt: { gte: new Date() } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     take: 10,
   });
+}
+
+/** Every item in the guild, including past-due ones (TA dashboard tile and task list). */
+export async function countItemsByGuild(guildId: string): Promise<number> {
+  return prisma.item.count({ where: { guildId } });
 }
 
 export async function getItemById(id: string): Promise<Item | null> {
@@ -50,4 +90,11 @@ export async function getItemAggregate(itemId: string) {
     counts[s.state] = s._count.state;
   }
   return counts;
+}
+
+export async function setItemDiscordCategory(itemId: string, discordCategoryId: string): Promise<Item> {
+  return prisma.item.update({
+    where: { id: itemId },
+    data: { discordCategoryId },
+  });
 }
