@@ -19,19 +19,20 @@ import {
   getOrCreateStudent,
   getConceptById,
   getStudentJoinedRoomChannels,
+  getTaQueue,
   isTa,
   giveConsent,
   normalizeLabel,
   revokeAndDelete,
   setStatus,
 } from "@classync/core";
-import { conceptPickerScreen, taskDetailScreen, taskListScreen, stuckNotice } from "../ui/tasks.js";
+import { conceptPickerScreen, consentScreen, taskDetailScreen, taskListScreen, stuckNotice } from "../ui/tasks.js";
 import { revokeStudentRoomAccess } from "../topicRooms.js";
 import { handleRoomButton, handleRoomModal, handleRoomSelect } from "./rooms.js";
 
 type TaskComponent = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 
-async function contextForItem(itemId: string, userId: string, interactionGuildId: string | null) {
+export async function contextForItem(itemId: string, userId: string, interactionGuildId: string | null) {
   const item = await getItemById(itemId);
   if (!item) return null;
   if (interactionGuildId !== null) {
@@ -115,6 +116,34 @@ async function handlePrivacy(interaction: ButtonInteraction): Promise<void> {
 async function handleButton(interaction: ButtonInteraction): Promise<void> {
   if (interaction.customId.startsWith("task:consent:")) return handleConsent(interaction);
   if (interaction.customId.startsWith("task:privacy")) return handlePrivacy(interaction);
+
+  if (interaction.customId === "task:panel-tasks" || interaction.customId === "task:panel-ask") {
+    if (!interaction.guildId) return;
+    const guild = await getGuildByDiscordId(interaction.guildId);
+    if (!guild) return;
+    const student = await getConsentedStudent(guild.id, interaction.user.id);
+    if (!student) {
+      await interaction.editReply(consentScreen());
+      return;
+    }
+    await interaction.editReply(await taskListScreen(guild.id, student));
+    return;
+  }
+
+  if (interaction.customId === "task:panel-ta") {
+    if (!interaction.guildId) return;
+    if (!await isTa(interaction.guildId, interaction.user.id)) {
+      await interaction.editReply({ content: "Menu ini dikhususkan untuk Dosen & Asisten Dosen (TA) yang terdaftar." });
+      return;
+    }
+    const guild = await getGuildByDiscordId(interaction.guildId);
+    const queue = guild ? await getTaQueue(guild.id) : [];
+    await interaction.editReply({
+      content: `🧑‍🏫 **TA Dashboard & Queue**\nAntrean saat ini: **${queue.length} topik**.\nGunakan command \`/ta queue\` untuk melihat antrean lengkap di Discord, atau [Buka Web Dashboard](http://localhost:3000/g/${guild?.id}).`,
+    });
+    return;
+  }
+
   if (await handleRoomButton(interaction)) return;
 
   const [, action, itemId, state] = interaction.customId.split(":");
@@ -203,26 +232,14 @@ export async function handleTaskInteraction(interaction: TaskComponent): Promise
     await handleSelect(interaction);
     return true;
   }
+  if (interaction.isButton() && interaction.customId.startsWith("task:panel-")) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await handleButton(interaction);
+    return true;
+  }
   await interaction.deferUpdate();
   if (interaction.isButton()) await handleButton(interaction);
   else if (interaction.isStringSelectMenu()) await handleSelect(interaction);
   return true;
 }
 
-export async function handleReminderInteraction(interaction: ButtonInteraction): Promise<boolean> {
-  if (!interaction.customId.startsWith("reminder:")) return false;
-  await interaction.deferUpdate();
-  const [, action, itemId] = interaction.customId.split(":");
-  if (!itemId) return true;
-  const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
-  if (!context) {
-    await interaction.followUp({ content: "Open `/tasks` in the class server to update this task.", flags: MessageFlags.Ephemeral });
-    return true;
-  }
-  if (action === "done") {
-    await interaction.editReply({ content: "The Done status is no longer used. Use **Still stuck** if you need help.", components: [] });
-  } else if (action === "stuck") {
-    await interaction.editReply(await conceptPickerScreen(itemId));
-  }
-  return true;
-}

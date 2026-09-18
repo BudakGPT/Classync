@@ -10,7 +10,9 @@ import setup from "./commands/setup.js";
 import ta from "./commands/ta.js";
 import tasks from "./commands/tasks.js";
 import { requiredEnv } from "./config.js";
-import { handleReminderInteraction, handleTaskInteraction } from "./interactions/tasks.js";
+import { handleTaskInteraction } from "./interactions/tasks.js";
+import { handleReminderInteraction } from "./interactions/reminders.js";
+import { handleSetupModal } from "./interactions/setup.js";
 import { handleTaAutocomplete } from "./interactions/ta.js";
 import { startDeliverJob } from "./jobs/deliver.js";
 import { startReminderJob } from "./jobs/reminders.js";
@@ -65,8 +67,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleReminderInteraction(interaction);
       return;
     }
-    if (interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === "setup:academic-modal") {
+        await handleSetupModal(interaction);
+        return;
+      }
       await handleTaskInteraction(interaction);
+      return;
+    }
+    if (interaction.isStringSelectMenu()) {
+      await handleTaskInteraction(interaction);
+      return;
     }
   } catch (error) {
     console.error("[interaction] Error", error);
