@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Download, Upload, type LucideIcon } from "lucide-react";
+import { Download, GraduationCap, Upload, UserRoundCog } from "lucide-react";
 import { uploadRoster, type UploadResult } from "@/actions/roster";
 import { Button } from "@/components/ui";
 import { plural } from "@/lib/utils";
@@ -15,6 +15,9 @@ const TEMPLATE_CSV =
 
 type Phase = { kind: "idle" } | { kind: "done"; result: UploadResult } | { kind: "error"; message: string };
 
+const ICONS = { student: GraduationCap, ta: UserRoundCog } as const;
+type IconKey = keyof typeof ICONS;
+
 function downloadTemplate() {
   const url = URL.createObjectURL(new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8;" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: "classync_roster_template.csv" });
@@ -23,9 +26,10 @@ function downloadTemplate() {
 }
 
 /** One upload card per default role. Posts the file to the `uploadRoster` server action. */
-export function RosterUpload({ guildId, role, title, description, icon: Icon, withTemplate }: {
-  guildId: string; role: "STUDENT" | "TA"; title: string; description: string; icon: LucideIcon; withTemplate?: boolean;
+export function RosterUpload({ guildId, role, title, description, iconKey, withTemplate }: {
+  guildId: string; role: "STUDENT" | "TA"; title: string; description: string; iconKey: IconKey; withTemplate?: boolean;
 }) {
+  const Icon = ICONS[iconKey];
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [pending, startTransition] = useTransition();

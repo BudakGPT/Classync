@@ -1,4 +1,4 @@
-import { CircleCheck, GraduationCap, IdCard, Layers, ShieldCheck, UserRoundCog, Users } from "lucide-react";
+import { CircleCheck, GraduationCap, IdCard, Layers, ShieldCheck, UserRoundCog } from "lucide-react";
 import { getDistinctClasses, getRosterByGuild } from "@classync/core";
 import { AuthToggle } from "@/components/roster/AuthToggle";
 import { RosterTable, type RosterRow } from "@/components/roster/RosterTable";
@@ -65,7 +65,7 @@ export default async function RosterPage({ params }: Props) {
           role="STUDENT"
           title="Import students"
           description="Columns NPM, Name and Class (Kelas A, Rombel 2, …) in any order; headers are detected automatically."
-          icon={Users}
+          iconKey="student"
           withTemplate
         />
         <RosterUpload
@@ -73,7 +73,7 @@ export default async function RosterPage({ params }: Props) {
           role="TA"
           title="Import TAs"
           description="Columns NPM and Name. A TA who verifies in Discord gets @Teaching Assistant and dashboard access."
-          icon={UserRoundCog}
+          iconKey="ta"
         />
       </section>
 
