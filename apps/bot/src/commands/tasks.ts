@@ -1,5 +1,5 @@
 import { MessageFlags, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { getConsentedStudent } from "@classync/core";
+import { getConsentedStudent, getGuildByDiscordId } from "@classync/core";
 import { consentScreen, taskListScreen } from "../ui/tasks.js";
 
 export default {
@@ -9,9 +9,14 @@ export default {
       await interaction.reply({ content: "This command is available in a class server only.", flags: MessageFlags.Ephemeral });
       return;
     }
-    const student = await getConsentedStudent(interaction.guildId, interaction.user.id);
+    const guild = await getGuildByDiscordId(interaction.guildId);
+    if (!guild) {
+      await interaction.reply({ content: "A TA must run `/setup channel` first.", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const student = await getConsentedStudent(guild.id, interaction.user.id);
     await interaction.reply({
-      ...(student ? await taskListScreen(interaction.guildId, student) : consentScreen()),
+      ...(student ? await taskListScreen(guild.id, student) : consentScreen()),
       flags: MessageFlags.Ephemeral,
     });
   },

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags, type Interaction } from "discord.js";
 import setup from "./commands/setup.js";
 import ta from "./commands/ta.js";
 import tasks from "./commands/tasks.js";
@@ -11,6 +11,19 @@ import { startReminderJob } from "./jobs/reminders.js";
 
 const commands = new Map([[setup.data.name, setup], [tasks.data.name, tasks], [ta.data.name, ta]]);
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+async function reportInteractionError(interaction: Interaction): Promise<void> {
+  if (!interaction.isRepliable()) return;
+  try {
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content: "Something went wrong. Please try again.", flags: MessageFlags.Ephemeral });
+    } else {
+      await interaction.reply({ content: "Something went wrong. Please try again.", flags: MessageFlags.Ephemeral });
+    }
+  } catch (responseError) {
+    console.error("[interaction] Could not send error response", responseError);
+  }
+}
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Classync bot ready: ${readyClient.user.tag}`);
@@ -37,14 +50,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isStringSelectMenu() || interaction.isModalSubmit()) await handleTaskInteraction(interaction);
   } catch (error) {
     console.error("[interaction] Error", error);
-    if (interaction.isRepliable()) {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: "Something went wrong. Please try again.", flags: MessageFlags.Ephemeral });
-      } else {
-        await interaction.reply({ content: "Something went wrong. Please try again.", flags: MessageFlags.Ephemeral });
-      }
-    }
+    await reportInteractionError(interaction);
   }
 });
+
+client.on(Events.Error, (error) => console.error("[discord] Client error", error));
 
 await client.login(requiredEnv("DISCORD_TOKEN"));
