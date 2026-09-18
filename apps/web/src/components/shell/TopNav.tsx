@@ -4,7 +4,7 @@ import {
   Settings, UserPlus, UserRound, UsersRound,
 } from 'lucide-react'
 import { ALL_NAV } from '@/app/nav'
-import { Avatar, Button, DiscordGlyph, IconButton, Kbd, Menu, Popover, Tooltip } from '@/components/ui'
+import { Avatar, Button, IconButton, Kbd, Menu, Popover } from '@/components/ui'
 import { href, navigate, useRoute } from '@/lib/router'
 import { shortName } from '@/lib/selectors'
 import { relTime } from '@/lib/time'
@@ -67,13 +67,7 @@ export function TopNav({ onOpenMobile }: { onOpenMobile: () => void }) {
       </button>
       <IconButton icon={Search} label="Search" onClick={() => setPaletteOpen(true)} className="lg:hidden" />
 
-      <Tooltip content={`${data.discord.server} · synced ${relTime(data.discord.lastSync)}`} side="bottom">
-        <a href={href('/discord')} className="hidden h-9 items-center gap-2 rounded-xl border border-line bg-surface px-2.5 text-[12.5px] font-semibold text-ink-2 shadow-card transition hover:border-line-strong xl:inline-flex">
-          <DiscordGlyph className="size-4 text-discord" />
-          <span className="relative size-2"><span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping-soft" /><span className="absolute inset-0 rounded-full bg-emerald-500" /></span>
-          {data.discord.connected ? 'Connected' : 'Offline'}
-        </a>
-      </Tooltip>
+
 
       <Inbox />
 

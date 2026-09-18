@@ -12,10 +12,13 @@ interface SubmitAnswerParams {
 
 export async function submitAnswer({ conceptId, guildId, authorUserId, body }: SubmitAnswerParams) {
   // Write to outbox — bot deliver job picks it up every 10s
-  await createAnswer({ conceptId, authorUserId, body });
+  const answer = await createAnswer({ conceptId, authorUserId, body });
   await markRequestsAnswered(conceptId);
 
   // Revalidate the concept page and guild overview
   revalidatePath(`/g/${guildId}/concepts/${conceptId}`);
   revalidatePath(`/g/${guildId}`);
+
+  return { answerId: answer.id };
 }
+
