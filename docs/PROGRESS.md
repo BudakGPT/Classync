@@ -19,6 +19,10 @@ flowchart LR
     D -->|In progress / Done| E[ItemStatus, private]
     D -->|Stuck + label| F[Concept cluster]
     F -->|>= 5 reporters| G[Count shown, no names]
+    F -->|classmate who finished<br/>and opted in| P[Offer DM to <= 2 helpers]
+    P -->|first Yes| Q[Private bot-relayed DM<br/>anonymous until reveal]
+    Q -->|Resolved by either side| E
+    P -->|no Yes in 30 min| H
     F --> H{Request TA help?<br/>explicit, identity revealed}
     H -->|yes| I[HelpRequest]
     I --> J[TA queue: Discord /ta queue<br/>+ web dashboard]
@@ -42,6 +46,9 @@ flowchart LR
 | Auto-ingest of announcements | Kept, built last, with `/ta add-item` fallback | Only feature that can fail on stage |
 
 Flowchart changes made during Hack Day are logged in the checkpoint entries below.
+
+**18 Sep 2026 (peer matching, integrator):** the flow gained one branch, Stuck → classmate who finished → private
+relay → Resolved, with the TA path as the fallback after 30 minutes. Spec: `docs/personal_handoff/peer-matching-handoff.md`.
 
 ---
 

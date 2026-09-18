@@ -2,15 +2,19 @@ import "dotenv/config";
 import {
   Client,
   GatewayIntentBits,
+  Partials,
   Collection,
   Events,
   MessageFlags,
+  type Interaction,
   type InteractionReplyOptions,
 } from "discord.js";
 import { readdirSync } from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 import { join, dirname } from "path";
-import cron from "node-cron";
+import { handleComponent } from "./interactions/router";
+import { handleDirectMessage } from "./interactions/relay";
+import { handleAutoIngest } from "./interactions/autoIngest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +30,8 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
   ],
+  // Required for messageCreate to fire in DMs (peer-match relay).
+  partials: [Partials.Channel],
 });
 
 const commands = new Collection<string, Command>();
@@ -43,35 +49,45 @@ client.once(Events.ClientReady, async (c) => {
   // Start jobs
   const { startDeliverJob } = await import("./jobs/deliver");
   const { startReminderJob } = await import("./jobs/reminders");
+  const { startMatchExpiryJob } = await import("./jobs/matchExpiry");
   startDeliverJob(c);
   startReminderJob(c);
+  startMatchExpiryJob(c);
 });
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  const command = commands.get(interaction.commandName);
-  if (!command) return;
-
+async function reportInteractionError(interaction: Interaction): Promise<void> {
+  if (!interaction.isRepliable()) return;
+  const msg: InteractionReplyOptions = { content: "❌ Something went wrong. Try again.", flags: MessageFlags.Ephemeral };
   try {
-    await command.execute(interaction);
+    if (interaction.replied || interaction.deferred) await interaction.followUp(msg);
+    else await interaction.reply(msg);
   } catch (err) {
-    console.error(`Error in /${interaction.commandName}:`, err);
-    const msg: InteractionReplyOptions = {
-      content: "❌ Something went wrong. Try again.",
-      flags: MessageFlags.Ephemeral,
-    };
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(msg);
-    } else {
-      await interaction.reply(msg);
+    console.error("[interaction] Could not send error response:", err);
+  }
+}
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  try {
+    if (interaction.isChatInputCommand()) {
+      const command = commands.get(interaction.commandName);
+      if (command) await command.execute(interaction);
+      return;
     }
+    await handleComponent(interaction);
+  } catch (err) {
+    console.error("[interaction] Error:", err);
+    await reportInteractionError(interaction);
   }
 });
 
-// Auto-ingest: messageCreate in announcement channel (Late MVP / B6)
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
-  const { handleAutoIngest } = await import("./interactions/autoIngest");
+  if (!message.guildId) {
+    // DM: peer-match relay
+    await handleDirectMessage(client, message).catch(console.error);
+    return;
+  }
+  // Auto-ingest: messageCreate in announcement channel (Late MVP / B6)
   await handleAutoIngest(client, message).catch(console.error);
 });
 

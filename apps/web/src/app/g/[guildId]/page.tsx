@@ -7,6 +7,7 @@ import {
   getDeliveredAnswerCount,
   getDifficultyList,
   getHeatMapData,
+  getPeerMetrics,
   isTa,
 } from "@classync/core";
 import { redirect, notFound } from "next/navigation";
@@ -34,7 +35,7 @@ export default async function GuildOverviewPage({ params }: Props) {
     redirect("/guilds");
   }
 
-  const [itemCount, studentCount, openRequests, answersDelivered, difficulty, heatMap] =
+  const [itemCount, studentCount, openRequests, answersDelivered, difficulty, heatMap, peer] =
     await Promise.all([
       getItemsByGuild(guild.id).then((i) => i.length),
       getConsentedStudentCount(guild.id),
@@ -42,7 +43,28 @@ export default async function GuildOverviewPage({ params }: Props) {
       getDeliveredAnswerCount(guild.id),
       getDifficultyList(guild.id),
       getHeatMapData(guild.id),
+      getPeerMetrics(guild.id),
     ]);
+
+  // Peer-matching tiles: counts only, null below the privacy floor (handoff §6)
+  const PRIVACY_FLOOR_TEXT = "Privacy floor: fewer than 5 matches";
+  const peerTiles = [
+    {
+      label: "Resolved by classmates",
+      value: peer.peerResolvedCount === null ? PRIVACY_FLOOR_TEXT : peer.peerResolvedCount,
+      icon: "🤝",
+    },
+    {
+      label: "Median minutes to a human",
+      value:
+        peer.peerResolvedCount === null
+          ? PRIVACY_FLOOR_TEXT
+          : peer.medianMinutesToAccept === null
+            ? "No accepted matches yet"
+            : peer.medianMinutesToAccept,
+      icon: "⏱️",
+    },
+  ];
 
   return (
     <main className="mx-auto max-w-5xl p-6 space-y-8">
@@ -75,6 +97,21 @@ export default async function GuildOverviewPage({ params }: Props) {
           >
             <span className="text-2xl">{tile.icon}</span>
             <span className="text-3xl font-bold">{tile.value}</span>
+            <span className="text-xs text-gray-400">{tile.label}</span>
+          </div>
+        ))}
+      </section>
+
+      {/* Peer matching tiles */}
+      <section className="grid grid-cols-2 gap-4">
+        {peerTiles.map((tile) => (
+          <div key={tile.label} className="rounded-xl p-5 flex flex-col gap-1 bg-gray-800">
+            <span className="text-2xl">{tile.icon}</span>
+            {typeof tile.value === "number" ? (
+              <span className="text-3xl font-bold">{tile.value}</span>
+            ) : (
+              <span className="text-sm text-gray-400 py-2">{tile.value}</span>
+            )}
             <span className="text-xs text-gray-400">{tile.label}</span>
           </div>
         ))}

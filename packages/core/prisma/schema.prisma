@@ -12,21 +12,24 @@ model Guild {
   discordGuildId        String    @unique
   name                  String
   announcementChannelId String?
-  taUserIds             String[]  // Discord user IDs allowed to use /ta and the dashboard
+  taUserIds             String[] // Discord user IDs allowed to use /ta and the dashboard
   installedAt           DateTime  @default(now())
   items                 Item[]
   students              Student[]
 }
 
 model Student {
-  id            String       @id @default(cuid())
-  guildId       String
-  discordUserId String       // Discord snowflakes are ALWAYS String
-  consentedAt   DateTime?
-  revokedAt     DateTime?
-  guild         Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  statuses      ItemStatus[]
-  helpRequests  HelpRequest[]
+  id                String        @id @default(cuid())
+  guildId           String
+  discordUserId     String // Discord snowflakes are ALWAYS String
+  consentedAt       DateTime?
+  revokedAt         DateTime?
+  helperOptIn       Boolean       @default(false) // opted in to be offered as a peer helper
+  guild             Guild         @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  statuses          ItemStatus[]
+  helpRequests      HelpRequest[]
+  matchesAsReceiver Match[]       @relation("receiver")
+  matchesAsProvider Match[]       @relation("provider")
 
   @@unique([guildId, discordUserId])
 }
@@ -50,6 +53,7 @@ model Item {
   guild           Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
   concepts        Concept[]
   statuses        ItemStatus[]
+  matches         Match[]
 }
 
 enum StatusState {
@@ -60,16 +64,16 @@ enum StatusState {
 }
 
 model ItemStatus {
-  id        String      @id @default(cuid())
-  itemId    String
-  studentId String
-  state     StatusState @default(NONE)
-  conceptId String?
-  updatedAt DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  itemId     String
+  studentId  String
+  state      StatusState @default(NONE)
+  conceptId  String?
+  updatedAt  DateTime    @updatedAt
   remindedAt DateTime?
-  item      Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  concept   Concept?    @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  item       Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  concept    Concept?    @relation(fields: [conceptId], references: [id], onDelete: SetNull)
 
   @@unique([itemId, studentId])
 }
@@ -77,13 +81,14 @@ model ItemStatus {
 model Concept {
   id           String        @id @default(cuid())
   itemId       String
-  label        String        // normalized: trimmed, lowercased, punctuation stripped
+  label        String // normalized: trimmed, lowercased, punctuation stripped
   aliases      String[]
   createdAt    DateTime      @default(now())
   item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   statuses     ItemStatus[]
   helpRequests HelpRequest[]
   answers      Answer[]
+  matches      Match[]
 
   @@unique([itemId, label])
 }
@@ -116,4 +121,37 @@ model Answer {
   deliveredCount  Int       @default(0)
   pinnedMessageId String?
   concept         Concept   @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+}
+
+// ==== Peer matching (docs/personal_handoff/peer-matching-handoff.md §2) ====
+// No message table: relayed text is forwarded by the bot and never stored.
+
+enum MatchState {
+  PENDING // offer sent to providers, nobody accepted yet
+  ACTIVE // one provider accepted, relay is open
+  RESOLVED // either side tapped Resolved
+  EXPIRED // 30 min with no acceptance, receiver sent to TA path
+  REPORTED // either side tapped Report; TAs notified with match id only
+}
+
+model Match {
+  id               String     @id @default(cuid())
+  itemId           String
+  conceptId        String?
+  receiverId       String // Student.id, the stuck student
+  providerId       String? // Student.id, null while PENDING
+  offeredTo        String[] // Student.id values the offer was sent to
+  state            MatchState @default(PENDING)
+  receiverRevealed Boolean    @default(false)
+  providerRevealed Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  acceptedAt       DateTime?
+  resolvedAt       DateTime?
+  item             Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  concept          Concept?   @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  receiver         Student    @relation("receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  provider         Student?   @relation("provider", fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, state])
+  @@index([providerId, state])
 }
