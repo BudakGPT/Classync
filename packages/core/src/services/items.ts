@@ -87,3 +87,10 @@ export async function getItemAggregate(itemId: string) {
   }
   return counts;
 }
+
+export async function setItemDiscordCategory(itemId: string, discordCategoryId: string): Promise<Item> {
+  return prisma.item.update({
+    where: { id: itemId },
+    data: { discordCategoryId },
+  });
+}

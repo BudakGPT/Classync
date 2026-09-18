@@ -14,7 +14,7 @@ import { handleReminderInteraction, handleTaskInteraction } from "./interactions
 import { handleTaAutocomplete } from "./interactions/ta.js";
 import { startDeliverJob } from "./jobs/deliver.js";
 import { startReminderJob } from "./jobs/reminders.js";
-import { handleTopicRoomMessage } from "./topicRooms.js";
+import { handleTopicRoomMessage } from "./notifications.js";
 
 const commands = new Map([
   [setup.data.name, setup],

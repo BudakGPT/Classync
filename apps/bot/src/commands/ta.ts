@@ -5,7 +5,7 @@ export default {
   data: new SlashCommandBuilder()
     .setName("ta")
     .setDescription("TA-only Classync tools")
-    .addSubcommand((sub) => sub.setName("add-item").setDescription("Add a task")
+    .addSubcommand((sub) => sub.setName("add-item").setDescription("Add a task and auto-provision category")
       .addStringOption((option) => option.setName("title").setDescription("Task title").setRequired(true))
       .addStringOption((option) => option.setName("due").setDescription("YYYY-MM-DD or YYYY-MM-DD HH:mm (Jakarta)"))
       .addStringOption((option) => option.setName("kind").setDescription("Task type").addChoices(
@@ -15,9 +15,12 @@ export default {
     .addSubcommand((sub) => sub.setName("answer").setDescription("Answer a concept")
       .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true))
       .addStringOption((option) => option.setName("body").setDescription("Answer").setRequired(true)))
-    .addSubcommand((sub) => sub.setName("archive-room").setDescription("Lock and archive a discussion room")
+    .addSubcommand((sub) => sub.setName("close-room").setDescription("Close a discussion room (after due date)")
       .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true)))
-    .addSubcommand((sub) => sub.setName("reopen-room").setDescription("Explicitly reopen a discussion room")
-      .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true))),
+    .addSubcommand((sub) => sub.setName("reopen-room").setDescription("Reopen a closed discussion room")
+      .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true)))
+    .addSubcommand((sub) => sub.setName("close-task-rooms").setDescription("Close all rooms for a task (after due date)")
+      .addStringOption((option) => option.setName("item").setDescription("Task").setRequired(true).setAutocomplete(true))
+      .addBooleanOption((option) => option.setName("delete_discord").setDescription("Delete channels and category from Discord"))),
   execute: handleTaCommand as (interaction: ChatInputCommandInteraction) => Promise<void>,
 };

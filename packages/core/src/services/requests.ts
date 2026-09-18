@@ -59,8 +59,8 @@ export async function getTaQueue(guildId: string) {
   const concepts = await prisma.concept.findMany({
     where: { item: { guildId } },
     include: {
-      item: { select: { id: true, title: true } },
-      topicRoom: true,
+      item: { select: { id: true, title: true, dueAt: true } },
+      topicRoom: { include: { members: true } },
       helpRequests: {
         where: { state: "OPEN" },
         include: { student: { select: { discordUserId: true } } },

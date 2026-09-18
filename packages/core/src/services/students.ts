@@ -50,6 +50,7 @@ export async function giveConsent(studentId: string): Promise<Student> {
 /** Revoke consent and delete all personal data in this guild. */
 export async function revokeAndDelete(studentId: string): Promise<void> {
   await prisma.$transaction([
+    prisma.topicRoomMember.deleteMany({ where: { studentId } }),
     prisma.itemStatus.deleteMany({ where: { studentId } }),
     prisma.helpRequest.deleteMany({ where: { studentId } }),
     prisma.student.update({
@@ -57,6 +58,14 @@ export async function revokeAndDelete(studentId: string): Promise<void> {
       data: { consentedAt: null, revokedAt: new Date() },
     }),
   ]);
+}
+
+export async function getStudentJoinedRoomChannels(studentId: string): Promise<string[]> {
+  const members = await prisma.topicRoomMember.findMany({
+    where: { studentId },
+    include: { room: { select: { channelId: true } } },
+  });
+  return members.map((m) => m.room.channelId).filter((c): c is string => c !== null);
 }
 
 export async function hasConsented(studentId: string): Promise<boolean> {

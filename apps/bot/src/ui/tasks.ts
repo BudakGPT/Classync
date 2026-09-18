@@ -10,10 +10,8 @@ import {
   getItemsByGuild,
   getItemById,
   getLatestAnswerForConcept,
-  getJoinableTopicRoom,
   getMyStatus,
   getMyStatusMap,
-  getStuckCount,
 } from "@classync/core";
 
 type StudentRef = { id: string };
@@ -37,8 +35,8 @@ export function consentScreen() {
   return {
     content: [
       "## Your privacy comes first",
-      "Classync stores your Discord ID, your private task statuses, and any TA-help requests you explicitly send.",
-      "Your statuses are visible only to you. You can delete your data anytime with **Privacy**. Messages you voluntarily post in a Discord discussion cannot be deleted by Classync.",
+      "Classync stores your Discord ID, your private task statuses, and any TA-help requests or concept rooms you join.",
+      "Your statuses are visible only to you. When you join a private concept room, all members and TAs in that room can see your Discord identity and messages. You can delete your data anytime with **Privacy**.",
     ].join("\n\n"),
     components: [row],
   };
@@ -68,7 +66,7 @@ export async function taskListScreen(guildId: string, student: StudentRef) {
       .setValue(item.id)));
 
   return {
-    content: `## Your tasks\n${lines.join("\n")}\n\nChoose a task below to update its private status.`,
+    content: `## Your tasks\n${lines.join("\n")}\n\nChoose a task below to update its status or enter a concept room.`,
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(picker), privacyRow],
   };
 }
@@ -77,17 +75,16 @@ export async function taskDetailScreen(itemId: string, student: StudentRef, noti
   const item = await getItemById(itemId);
   if (!item) return { content: "That task no longer exists.", components: [] };
   const status = await getMyStatus(item.id, student.id);
-  const topicRoom = status?.conceptId ? await getJoinableTopicRoom(status.conceptId) : null;
   const state = status?.state ?? "NONE";
   const due = item.dueAt ? `<t:${Math.floor(item.dueAt.getTime() / 1000)}:F>` : "No due date";
-  const statusRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`task:stuck:${item.id}`).setLabel("Stuck").setStyle(ButtonStyle.Danger),
-  );
+
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:stuck:${item.id}`).setLabel("Stuck").setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`task:room:${item.id}`).setLabel("Ask / Join Room").setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`task:help:${item.id}`).setLabel("Request TA help").setStyle(ButtonStyle.Secondary),
-    ...(topicRoom ? [new ButtonBuilder().setCustomId(`task:join:${item.id}:${topicRoom.id}`).setLabel("Join discussion").setStyle(ButtonStyle.Primary)] : []),
     new ButtonBuilder().setCustomId(`task:back:${item.id}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
   );
+
   return {
     content: [
       `## ${item.title}`,
@@ -95,7 +92,7 @@ export async function taskDetailScreen(itemId: string, student: StudentRef, noti
       `**Your private status:** ${statusEmoji[state] ?? "⚪"} ${state}`,
       notice ? `\n${notice}` : "",
     ].join("\n"),
-    components: [statusRow, actionRow],
+    components: [actionRow],
   };
 }
 
@@ -110,21 +107,54 @@ export async function conceptPickerScreen(itemId: string) {
     .setPlaceholder("What are you stuck on?")
     .addOptions(options);
   const back = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`task:back:${itemId}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`task:detail:${itemId}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
   );
   return {
-    content: "Choose an existing concept, or type a new one. This is private; a discussion room is optional if one becomes available.",
+    content: "Choose an existing concept or type a new one. This saves your Stuck status privately.",
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(picker), back],
   };
 }
 
+export async function roomPickerScreen(itemId: string) {
+  const concepts = await getConceptsForItem(itemId);
+  const options = concepts.slice(0, 24).map((concept) => new StringSelectMenuOptionBuilder()
+    .setLabel(truncate(concept.label, 100))
+    .setValue(concept.id));
+  options.push(new StringSelectMenuOptionBuilder().setLabel("Type a new concept...").setValue("new"));
+  const picker = new StringSelectMenuBuilder()
+    .setCustomId(`task:room-concept:${itemId}`)
+    .setPlaceholder("Which concept room do you want to enter?")
+    .addOptions(options);
+  const back = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:detail:${itemId}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
+  );
+  return {
+    content: "## Select a Concept Room\nChoose a concept to enter or create its private discussion room.",
+    components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(picker), back],
+  };
+}
+
+export function roomConfirmScreen(itemId: string, itemTitle: string, conceptId: string, conceptLabel: string) {
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:room-confirm:${itemId}:${conceptId}`).setLabel("Enter Room").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`task:detail:${itemId}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+  );
+  return {
+    content: [
+      `## ⚠️ Private Discussion Room: ${conceptLabel}`,
+      `**Task:** ${itemTitle}`,
+      `• All students and TAs in this room can see your Discord username, avatar, and messages.`,
+      `• Registered TAs are notified privately of new questions in this room.`,
+      `\nDo you want to enter this discussion room?`,
+    ].join("\n"),
+    components: [row],
+  };
+}
+
 export async function stuckNotice(conceptId: string): Promise<string> {
-  const count = await getStuckCount(conceptId);
   const answer = await getLatestAnswerForConcept(conceptId);
-  const topicRoom = count === null ? null : await getJoinableTopicRoom(conceptId);
-  const countMessage = topicRoom ? "A discussion room is available for this topic." : "Saved privately.";
   const answerMessage = answer
-    ? `\n\n**A TA already answered this:**\n${truncate(answer.body, 1_200)}`
+    ? `\n\n**A TA already answered this topic:**\n${truncate(answer.body, 1_200)}`
     : "";
-  return `${countMessage}${answerMessage}`;
+  return `Saved privately. You can click **Ask / Join Room** to enter the discussion room.${answerMessage}`;
 }

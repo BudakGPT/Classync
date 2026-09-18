@@ -21,10 +21,10 @@ async function sendPinnedAnswer(client: Client, channelId: string | null, guildI
   return message.id;
 }
 
-async function sendRoomAnswer(client: Client, guildId: string, threadId: string, content: string): Promise<{ messageId?: string; pinnedMessageId?: string }> {
+async function sendRoomAnswer(client: Client, guildId: string, channelId: string, content: string): Promise<{ messageId?: string; pinnedMessageId?: string }> {
   const guild = await client.guilds.fetch(guildId).catch(() => null);
-  const channel = guild ? await guild.channels.fetch(threadId).catch(() => null) : null;
-  if (!channel?.isThread() || !channel.isSendable()) return {};
+  const channel = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
+  if (!channel?.isSendable()) return {};
   const message = await channel.send(content);
   await message.pin().catch(() => undefined);
   return { messageId: message.id, pinnedMessageId: message.id };
@@ -50,25 +50,26 @@ export async function deliverPending(client: Client): Promise<void> {
         }
       }
 
-      const answerText = `📌 **Answer for: ${item.title}**\n**Topic:** ${concept.label}\n\n${answer.body}`;
+      const answerText = `📌 **TA Answer for: ${item.title}**\n**Topic:** ${concept.label}\n\n${answer.body}`;
       let pinnedMessageId: string | undefined;
       let threadMessageId: string | undefined;
-      if (concept.topicRoom?.threadId && concept.topicRoom.state !== "ARCHIVED") {
-        const sent: { messageId?: string; pinnedMessageId?: string } = await sendRoomAnswer(client, item.guild.discordGuildId, concept.topicRoom.threadId, answerText)
+
+      if (concept.topicRoom?.channelId && concept.topicRoom.state !== "CLOSED") {
+        const sent = await sendRoomAnswer(client, item.guild.discordGuildId, concept.topicRoom.channelId, answerText)
           .catch((error: unknown) => {
             console.warn("[deliver] Could not post topic-room answer", error);
             return { messageId: undefined, pinnedMessageId: undefined };
           });
         pinnedMessageId = sent.pinnedMessageId;
         threadMessageId = sent.messageId;
-      } else if (!concept.topicRoom) {
-        // Legacy/no-room fallback: a canonical room takes precedence whenever one exists.
+      } else if (!concept.topicRoom?.channelId) {
         pinnedMessageId = await sendPinnedAnswer(client, item.guild.announcementChannelId, item.guild.discordGuildId, answerText)
           .catch((error: unknown) => {
             console.warn("[deliver] Could not post pinned answer", error);
             return undefined;
           });
       }
+
       await stampDelivered(answer.id, deliveredCount, pinnedMessageId, threadMessageId);
       console.log(`[deliver] Answer ${answer.id} delivered to ${deliveredCount} requester(s)`);
     }

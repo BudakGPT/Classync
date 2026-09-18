@@ -14,20 +14,20 @@ import {
   createHelpRequest,
   getConsentedStudent,
   getGuildByDiscordId,
-  getStuckCount,
   getItemById,
   getOrCreateConcept,
   getOrCreateStudent,
   getConceptById,
-  getJoinableTopicRoom,
+  getStudentJoinedRoomChannels,
   isTa,
   giveConsent,
   normalizeLabel,
   revokeAndDelete,
   setStatus,
 } from "@classync/core";
-import { conceptPickerScreen, consentScreen, stuckNotice, taskDetailScreen, taskListScreen } from "../ui/tasks.js";
-import { ensureTopicRoom, threadUrl } from "../topicRooms.js";
+import { conceptPickerScreen, taskDetailScreen, taskListScreen, stuckNotice } from "../ui/tasks.js";
+import { revokeStudentRoomAccess } from "../topicRooms.js";
+import { handleRoomButton, handleRoomModal, handleRoomSelect } from "./rooms.js";
 
 type TaskComponent = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 
@@ -56,10 +56,6 @@ async function saveStuck(interaction: StringSelectMenuInteraction, itemId: strin
   const concept = await getConceptById(conceptId);
   if (!concept || concept.itemId !== itemId) return interaction.followUp({ content: "That concept is unavailable.", flags: MessageFlags.Ephemeral });
   await setStatus(itemId, context.student.id, "STUCK", concept.id);
-  const guild = interaction.guildId ? await getGuildByDiscordId(interaction.guildId) : null;
-  if (guild && await getStuckCount(concept.id)) {
-    await ensureTopicRoom(interaction.client, guild, { id: concept.id, title: context.item.title, label: concept.label });
-  }
   return interaction.editReply(await taskDetailScreen(itemId, context.student, await stuckNotice(concept.id)));
 }
 
@@ -101,14 +97,16 @@ async function handlePrivacy(interaction: ButtonInteraction): Promise<void> {
       new ButtonBuilder().setCustomId("task:privacy-cancel").setLabel("Cancel").setStyle(ButtonStyle.Secondary),
     );
     await interaction.editReply({
-      content: "Delete all of your statuses and TA-help requests in this server, and revoke consent? This cannot be undone. Classync cannot erase messages you voluntarily posted in Discord discussions.",
+      content: "Delete all of your statuses, room memberships, and TA-help requests in this server, and revoke consent? This cannot be undone.",
       components: [row],
     });
     return;
   }
   if (interaction.customId === "task:privacy-confirm") {
+    const channelIds = await getStudentJoinedRoomChannels(student.id);
+    await revokeStudentRoomAccess(interaction.client, guild.discordGuildId, interaction.user.id, channelIds);
     await revokeAndDelete(student.id);
-    await interaction.editReply({ content: "Your Classync data in this server has been deleted and consent revoked.", components: [] });
+    await interaction.editReply({ content: "Your Classync data and room access in this server have been deleted and consent revoked.", components: [] });
     return;
   }
   await interaction.editReply(await taskListScreen(guild.id, student));
@@ -117,36 +115,16 @@ async function handlePrivacy(interaction: ButtonInteraction): Promise<void> {
 async function handleButton(interaction: ButtonInteraction): Promise<void> {
   if (interaction.customId.startsWith("task:consent:")) return handleConsent(interaction);
   if (interaction.customId.startsWith("task:privacy")) return handlePrivacy(interaction);
+  if (await handleRoomButton(interaction)) return;
+
   const [, action, itemId, state] = interaction.customId.split(":");
   if (!itemId) return;
   const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
   if (!context) return void await interaction.followUp({ content: "Open `/tasks` in the class server first.", flags: MessageFlags.Ephemeral });
+
   if (action === "back") return void await interaction.editReply(await taskListScreen(context.item.guildId, context.student));
-  if (action === "status" && (state === "IN_PROGRESS" || state === "DONE")) {
-    await setStatus(itemId, context.student.id, state);
-    await interaction.editReply(await taskDetailScreen(itemId, context.student, "Saved privately."));
-    return;
-  }
   if (action === "stuck") {
     await interaction.editReply(await conceptPickerScreen(itemId));
-    return;
-  }
-  if (action === "join" && state) {
-    // The component stores a room ID, so resolve the student's current private concept before opening it.
-    const status = await import("@classync/core").then(({ getMyStatus }) => getMyStatus(itemId, context.student.id));
-    const currentRoom = status?.conceptId ? await getJoinableTopicRoom(status.conceptId) : null;
-    if (!currentRoom || currentRoom.id !== state || !currentRoom.threadId || !interaction.guildId) {
-      await interaction.editReply(await taskDetailScreen(itemId, context.student, "That discussion room is no longer available."));
-      return;
-    }
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setLabel("Open discussion").setStyle(ButtonStyle.Link).setURL(threadUrl(interaction.guildId, currentRoom.threadId)),
-      new ButtonBuilder().setCustomId(`task:back:${itemId}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
-    );
-    await interaction.editReply({
-      content: "Joining is visible to other participants. Your private Stuck report is not. Revoking consent deletes Classync private data but cannot erase messages you voluntarily post in Discord.",
-      components: [row],
-    });
     return;
   }
   if (action === "help") {
@@ -157,7 +135,7 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
     }
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`task:help-confirm:${itemId}:${status.conceptId}`).setLabel("Confirm request").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`task:back:${itemId}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`task:detail:${itemId}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
     );
     await interaction.editReply({
       content: "Your name will be visible to the TA for this item only. Do you want to request help?",
@@ -178,6 +156,8 @@ async function handleSelect(interaction: StringSelectMenuInteraction): Promise<v
     await refreshDetail(interaction, interaction.values[0]);
     return;
   }
+  if (await handleRoomSelect(interaction)) return;
+
   const [, action, itemId] = interaction.customId.split(":");
   if (action !== "concept" || !itemId) return;
   if (interaction.values[0] === "new") {
@@ -192,6 +172,8 @@ async function handleSelect(interaction: StringSelectMenuInteraction): Promise<v
 }
 
 async function handleModal(interaction: ModalSubmitInteraction): Promise<void> {
+  if (await handleRoomModal(interaction)) return;
+
   const [, action, itemId] = interaction.customId.split(":");
   if (action !== "new-concept" || !itemId) return;
   const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
@@ -203,10 +185,6 @@ async function handleModal(interaction: ModalSubmitInteraction): Promise<void> {
   }
   const concept = await getOrCreateConcept(itemId, rawLabel);
   await setStatus(itemId, context.student.id, "STUCK", concept.id);
-  const guild = interaction.guildId ? await getGuildByDiscordId(interaction.guildId) : null;
-  if (guild && await getStuckCount(concept.id)) {
-    await ensureTopicRoom(interaction.client, guild, { id: concept.id, title: context.item.title, label: concept.label });
-  }
   await interaction.editReply(await taskDetailScreen(itemId, context.student, await stuckNotice(concept.id)));
 }
 
@@ -217,7 +195,11 @@ export async function handleTaskInteraction(interaction: TaskComponent): Promise
     await handleModal(interaction);
     return true;
   }
-  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("task:concept:") && interaction.values[0] === "new") {
+  if (
+    interaction.isStringSelectMenu() &&
+    (interaction.customId.startsWith("task:concept:") || interaction.customId.startsWith("task:room-concept:")) &&
+    interaction.values[0] === "new"
+  ) {
     await handleSelect(interaction);
     return true;
   }

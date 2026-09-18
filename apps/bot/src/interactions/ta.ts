@@ -3,15 +3,21 @@ import {
   createAnswer,
   createItem,
   getGuildByDiscordId,
+  getItemById,
+  getItemsByGuild,
   getTaAnswerableConcepts,
   getTaQueue,
   isTa,
   markRequestsAnswered,
-  markTopicRoomAnswered,
   parseJakartaDueAt,
-  setTopicRoomState,
 } from "@classync/core";
-import { threadUrl } from "../topicRooms.js";
+import {
+  channelUrl,
+  closeAssignmentRooms,
+  closeTopicRoomChannel,
+  ensureItemCategory,
+  reopenTopicRoomChannel,
+} from "../topicRooms.js";
 
 const itemKinds = ["ASSIGNMENT", "QUIZ", "EXAM", "READING"] as const;
 
@@ -29,9 +35,12 @@ async function addItem(interaction: ChatInputCommandInteraction): Promise<void> 
   const rawKind = interaction.options.getString("kind") ?? "ASSIGNMENT";
   const kind = itemKinds.find((value) => value === rawKind);
   if (!kind) return void await interaction.editReply("Invalid task type.");
+
   const item = await createItem({ guildId: guild.id, title: interaction.options.getString("title", true), dueAt, kind });
+  await ensureItemCategory(interaction.client, guild.discordGuildId, item, guild.taUserIds).catch(() => null);
+
   const due = dueAt ? `<t:${Math.floor(dueAt.getTime() / 1000)}:F>` : "No due date";
-  await interaction.editReply(`Added **${item.title}** · ${kind} · ${due}`);
+  await interaction.editReply(`Added **${item.title}** · ${kind} · ${due} and provisioned category.`);
 }
 
 async function requesterName(interaction: ChatInputCommandInteraction, userId: string): Promise<string> {
@@ -44,17 +53,26 @@ async function showQueue(interaction: ChatInputCommandInteraction): Promise<void
   if (!guild) return void await interaction.editReply("Run `/setup channel` first.");
   const queue = await getTaQueue(guild.id);
   if (queue.length === 0) return void await interaction.editReply("No open TA-help requests or discussion rooms right now.");
-  const fields = await Promise.all(queue.slice(0, 10).map(async (entry) => ({
-    name: `${entry.requesters.length} open help request${entry.requesters.length === 1 ? "" : "s"} · ${entry.label}`,
-    value: [
-      `**${entry.item.title}**`,
-      entry.requesters.length > 0
-        ? `Requesters: ${(await Promise.all(entry.requesters.map((request) => requesterName(interaction, request.discordUserId)))).join(", ")}`
-        : "No private help requests.",
-      entry.topicRoom?.threadId ? `Room: [${entry.topicRoom.state}](${threadUrl(interaction.guildId as string, entry.topicRoom.threadId)})` : "Room: not available",
-      `ID: \`${entry.conceptId}\``,
-    ].join("\n"),
-  })));
+
+  const fields = await Promise.all(queue.slice(0, 10).map(async (entry) => {
+    const memberCount = entry.topicRoom?.members ? (entry.topicRoom.members as unknown[]).length : 0;
+    const roomInfo = entry.topicRoom?.channelId
+      ? `Room: [${entry.topicRoom.state}](${channelUrl(interaction.guildId as string, entry.topicRoom.channelId)}) (${memberCount} member${memberCount === 1 ? "" : "s"})`
+      : "Room: not created";
+
+    return {
+      name: `${entry.requesters.length} open help request${entry.requesters.length === 1 ? "" : "s"} · ${entry.label}`,
+      value: [
+        `**${entry.item.title}**`,
+        entry.requesters.length > 0
+          ? `Requesters: ${(await Promise.all(entry.requesters.map((req) => requesterName(interaction, req.discordUserId)))).join(", ")}`
+          : "No private help requests.",
+        roomInfo,
+        `ID: \`${entry.conceptId}\``,
+      ].join("\n"),
+    };
+  }));
+
   await interaction.editReply({ embeds: [new EmbedBuilder().setTitle("TA help queue").setColor(0xe74c3c).addFields(fields)] });
 }
 
@@ -64,27 +82,59 @@ async function answer(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!guild) return void await interaction.editReply("Run `/setup channel` first.");
   const concepts = await getTaAnswerableConcepts(guild.id);
   if (!concepts.some((concept) => concept.id === conceptId)) return void await interaction.editReply("That concept does not belong to this server.");
+
   await createAnswer({ conceptId, authorUserId: interaction.user.id, body: interaction.options.getString("body", true) });
   await markRequestsAnswered(conceptId);
-  await markTopicRoomAnswered(conceptId);
-  await interaction.editReply("Answer saved. The delivery worker will post it in the topic room and notify explicit help requesters.");
+  await interaction.editReply("Answer saved. Delivery worker will post it into the discussion channel and notify explicit help requesters. Room remains open for discussion.");
 }
 
-async function moderateRoom(interaction: ChatInputCommandInteraction, reopen: boolean): Promise<void> {
+async function closeRoom(interaction: ChatInputCommandInteraction): Promise<void> {
   const guild = await getGuildByDiscordId(interaction.guildId as string);
   if (!guild) return void await interaction.editReply("Run `/setup channel` first.");
   const conceptId = interaction.options.getString("concept", true);
-  const concept = (await getTaAnswerableConcepts(guild.id)).find((value) => value.id === conceptId);
-  if (!concept?.topicRoom?.threadId) return void await interaction.editReply("This concept has no discussion room.");
-  const channel = await interaction.guild?.channels.fetch(concept.topicRoom.threadId).catch(() => null);
-  if (!channel?.isThread()) return void await interaction.editReply("The configured discussion room is unavailable.");
-  try {
-    await channel.setArchived(!reopen);
-    await channel.setLocked(!reopen);
-    await setTopicRoomState(concept.topicRoom.id, reopen ? "OPEN" : "ARCHIVED");
-    await interaction.editReply(reopen ? "Discussion room reopened." : "Discussion room locked and archived; it remains readable.");
-  } catch {
-    await interaction.editReply("I could not update this room. Check my Manage Threads permission.");
+  const concept = (await getTaAnswerableConcepts(guild.id)).find((val) => val.id === conceptId);
+  if (!concept?.topicRoom) return void await interaction.editReply("This concept has no discussion room.");
+
+  const item = await getItemById(concept.itemId);
+  if (item?.dueAt && Date.now() < item.dueAt.getTime()) {
+    await interaction.editReply(`Cannot close room before the task due date (<t:${Math.floor(item.dueAt.getTime() / 1000)}:R>).`);
+    return;
+  }
+
+  await closeTopicRoomChannel(interaction.client, guild.discordGuildId, concept.topicRoom.id, interaction.user.id);
+  await interaction.editReply(`Discussion room for **${concept.label}** closed. It remains read-only as a knowledge base.`);
+}
+
+async function reopenRoom(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guild = await getGuildByDiscordId(interaction.guildId as string);
+  if (!guild) return void await interaction.editReply("Run `/setup channel` first.");
+  const conceptId = interaction.options.getString("concept", true);
+  const concept = (await getTaAnswerableConcepts(guild.id)).find((val) => val.id === conceptId);
+  if (!concept?.topicRoom) return void await interaction.editReply("This concept has no discussion room.");
+
+  await reopenTopicRoomChannel(interaction.client, guild.discordGuildId, concept.topicRoom.id);
+  await interaction.editReply(`Discussion room for **${concept.label}** reopened.`);
+}
+
+async function closeTaskRooms(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guild = await getGuildByDiscordId(interaction.guildId as string);
+  if (!guild) return void await interaction.editReply("Run `/setup channel` first.");
+  const itemId = interaction.options.getString("item", true);
+  const item = await getItemById(itemId);
+  if (!item || item.guildId !== guild.id) return void await interaction.editReply("Task not found.");
+
+  if (item.dueAt && Date.now() < item.dueAt.getTime()) {
+    await interaction.editReply(`Cannot close rooms before the task due date (<t:${Math.floor(item.dueAt.getTime() / 1000)}:R>).`);
+    return;
+  }
+
+  const deleteDiscord = interaction.options.getBoolean("delete_discord") ?? false;
+  const result = await closeAssignmentRooms(interaction.client, guild.discordGuildId, item, interaction.user.id, deleteDiscord);
+
+  if (result.deletedDiscord) {
+    await interaction.editReply(`Deleted ${result.closedCount} room channel(s) and the category for **${item.title}**.`);
+  } else {
+    await interaction.editReply(`Closed ${result.closedCount} room channel(s) for **${item.title}** (read-only).`);
   }
 }
 
@@ -98,14 +148,28 @@ export async function handleTaCommand(interaction: ChatInputCommandInteraction):
   if (command === "add-item") await addItem(interaction);
   else if (command === "queue") await showQueue(interaction);
   else if (command === "answer") await answer(interaction);
-  else await moderateRoom(interaction, command === "reopen-room");
+  else if (command === "close-room") await closeRoom(interaction);
+  else if (command === "reopen-room") await reopenRoom(interaction);
+  else if (command === "close-task-rooms") await closeTaskRooms(interaction);
 }
 
 export async function handleTaAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
   if (!await requireTa(interaction)) return void await interaction.respond([]);
   const guild = await getGuildByDiscordId(interaction.guildId as string);
   if (!guild) return void await interaction.respond([]);
+  const subcommand = interaction.options.getSubcommand(false);
   const needle = interaction.options.getFocused().toLowerCase();
+
+  if (subcommand === "close-task-rooms") {
+    const items = await getItemsByGuild(guild.id);
+    const choices = items
+      .filter((item) => item.title.toLowerCase().includes(needle))
+      .slice(0, 25)
+      .map((item) => ({ name: item.title, value: item.id }));
+    await interaction.respond(choices);
+    return;
+  }
+
   const choices = (await getTaAnswerableConcepts(guild.id))
     .filter((entry) => entry.label.includes(needle) || entry.item.title.toLowerCase().includes(needle))
     .slice(0, 25)
