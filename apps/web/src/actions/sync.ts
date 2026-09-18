@@ -17,6 +17,82 @@ export interface DbSyncPayload {
   students: Person[];
 }
 
+interface DbHelpRequestRecord {
+  id: string;
+  conceptId: string;
+  studentId: string;
+  state: string;
+  student: {
+    id: string;
+    discordUserId: string;
+  };
+}
+
+interface DbAnswerSubRecord {
+  id: string;
+  conceptId: string;
+  authorUserId: string;
+  body: string;
+  createdAt: Date;
+  deliveredAt: Date | null;
+  deliveredCount: number;
+  pinnedMessageId?: string | null;
+}
+
+interface DbConceptRecord {
+  id: string;
+  itemId: string;
+  label: string;
+  createdAt: Date;
+  helpRequests: DbHelpRequestRecord[];
+  answers: DbAnswerSubRecord[];
+}
+
+interface DbStatusRecord {
+  id: string;
+  itemId: string;
+  studentId: string;
+  state: string;
+  conceptId: string | null;
+}
+
+interface DbItemRecord {
+  id: string;
+  guildId: string;
+  title: string;
+  description: string | null;
+  dueAt: Date | null;
+  kind: string;
+  createdAt: Date;
+  concepts: DbConceptRecord[];
+  statuses: DbStatusRecord[];
+}
+
+interface DbAnswerRecord {
+  id: string;
+  conceptId: string;
+  authorUserId: string;
+  body: string;
+  createdAt: Date;
+  deliveredAt: Date | null;
+  deliveredCount: number;
+  concept: {
+    id: string;
+    label: string;
+    item: {
+      id: string;
+      title: string;
+    };
+  };
+}
+
+interface DbStudentRecord {
+  id: string;
+  guildId: string;
+  discordUserId: string;
+  consentedAt: Date | null;
+}
+
 export async function getDbSyncState(): Promise<DbSyncPayload> {
   try {
     const guild = await prisma.guild.findFirst({
@@ -35,7 +111,7 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
     }
 
     // Fetch items with concepts, help requests, answers, and statuses
-    const items = await prisma.item.findMany({
+    const rawItems = await prisma.item.findMany({
       where: { guildId: guild.id },
       include: {
         concepts: {
@@ -50,9 +126,10 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
       },
       orderBy: { createdAt: "desc" },
     });
+    const items = rawItems as unknown as DbItemRecord[];
 
     // Fetch all answers
-    const answers = await prisma.answer.findMany({
+    const rawAnswers = await prisma.answer.findMany({
       where: { concept: { item: { guildId: guild.id } } },
       include: {
         concept: {
@@ -61,14 +138,16 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
       },
       orderBy: { createdAt: "desc" },
     });
+    const answers = rawAnswers as unknown as DbAnswerRecord[];
 
     // Fetch students
-    const students = await prisma.student.findMany({
+    const rawStudents = await prisma.student.findMany({
       where: { guildId: guild.id },
     });
+    const students = rawStudents as unknown as DbStudentRecord[];
 
     // Map DB items to Assignment[]
-    const dbAssignments: Assignment[] = items.map((item) => {
+    const dbAssignments: Assignment[] = items.map((item: DbItemRecord) => {
       let category: Assignment["category"] = "Assignment";
       if (item.kind === "QUIZ") category = "Quiz";
       else if (item.kind === "READING") category = "Reading";
@@ -93,7 +172,7 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
         createdBy: "farhan",
         description: item.description ?? "Task synchronized from Discord /ta command or announcement.",
         progress,
-        helpClusterIds: item.concepts.map((c) => `db-concept-${c.id}`),
+        helpClusterIds: item.concepts.map((c: DbConceptRecord) => `db-concept-${c.id}`),
         notificationIds: [],
         isNew: true,
         dbItemId: item.id,
@@ -104,11 +183,11 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
     const dbHelpClusters: HelpCluster[] = [];
     for (const item of items) {
       for (const c of item.concepts) {
-        const stuckCount = item.statuses.filter((s) => s.conceptId === c.id && s.state === "STUCK").length;
-        const requesters = c.helpRequests.map((r) => r.student.discordUserId);
-        const hasDeliveredAnswer = c.answers.some((a) => a.deliveredAt !== null);
+        const stuckCount = item.statuses.filter((s: DbStatusRecord) => s.conceptId === c.id && s.state === "STUCK").length;
+        const requesters = c.helpRequests.map((r: DbHelpRequestRecord) => r.student.discordUserId);
+        const hasDeliveredAnswer = c.answers.some((a: DbAnswerSubRecord) => a.deliveredAt !== null);
         const hasPendingAnswer = c.answers.length > 0;
-        const openRequests = c.helpRequests.filter((r) => r.state === "OPEN");
+        const openRequests = c.helpRequests.filter((r: DbHelpRequestRecord) => r.state === "OPEN");
 
         const status: HelpCluster["status"] = hasDeliveredAnswer || (hasPendingAnswer && openRequests.length === 0)
           ? "answered"
@@ -137,7 +216,7 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
     }
 
     // Map DB answers to ReusableAnswer[]
-    const dbAnswers: ReusableAnswer[] = answers.map((ans) => ({
+    const dbAnswers: ReusableAnswer[] = answers.map((ans: DbAnswerRecord) => ({
       id: `db-ans-${ans.id}`,
       title: `Penjelasan: ${ans.concept.label}`,
       concept: ans.concept.label,
@@ -153,7 +232,7 @@ export async function getDbSyncState(): Promise<DbSyncPayload> {
     }));
 
     // Map DB students to Person[]
-    const dbStudents: Person[] = students.map((s, idx) => ({
+    const dbStudents: Person[] = students.map((s: DbStudentRecord, idx: number) => ({
       id: s.discordUserId,
       name: `Mahasiswa (${s.discordUserId.slice(-4)})`,
       role: "Student",
