@@ -10,16 +10,6 @@ export function startDeliverJob(client: Client): void {
   console.log("Deliver job started (every 10s)");
 }
 
-async function sendPinnedAnswer(client: Client, channelId: string | null, guildId: string, content: string): Promise<string | undefined> {
-  if (!channelId) return undefined;
-  const guild = await client.guilds.fetch(guildId).catch(() => null);
-  if (!guild) return undefined;
-  const channel = await guild.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isSendable()) return undefined;
-  const message = await channel.send(content);
-  await message.pin().catch(() => undefined);
-  return message.id;
-}
 
 async function sendRoomAnswer(client: Client, guildId: string, channelId: string, content: string): Promise<{ messageId?: string; pinnedMessageId?: string }> {
   const guild = await client.guilds.fetch(guildId).catch(() => null);
@@ -54,6 +44,7 @@ export async function deliverPending(client: Client): Promise<void> {
       let pinnedMessageId: string | undefined;
       let threadMessageId: string | undefined;
 
+      // Only post + pin in the topic room if one is open; otherwise answers are DM-only.
       if (concept.topicRoom?.channelId && concept.topicRoom.state !== "CLOSED") {
         const sent = await sendRoomAnswer(client, item.guild.discordGuildId, concept.topicRoom.channelId, answerText)
           .catch((error: unknown) => {
@@ -62,13 +53,6 @@ export async function deliverPending(client: Client): Promise<void> {
           });
         pinnedMessageId = sent.pinnedMessageId;
         threadMessageId = sent.messageId;
-      } else {
-        // No open room (never created, or closed): pin in the announcement channel (PRD B3).
-        pinnedMessageId = await sendPinnedAnswer(client, item.guild.announcementChannelId, item.guild.discordGuildId, answerText)
-          .catch((error: unknown) => {
-            console.warn("[deliver] Could not post pinned answer", error);
-            return undefined;
-          });
       }
 
       await stampDelivered(answer.id, deliveredCount, pinnedMessageId, threadMessageId);

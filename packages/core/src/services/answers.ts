@@ -28,7 +28,7 @@ export async function getAnswerDeliveryContext(answerId: string) {
     include: {
       concept: {
         include: {
-          item: { include: { guild: { select: { announcementChannelId: true, discordGuildId: true } } } },
+          item: { include: { guild: { select: { discordGuildId: true } } } },
           topicRoom: true,
         },
       },
