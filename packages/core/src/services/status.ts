@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "../db";
 import type { ItemStatus, StatusState } from "@prisma/client";
 
 /** Get or init a student's status for one item (never exposes to others). */
