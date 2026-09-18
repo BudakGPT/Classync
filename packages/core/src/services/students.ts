@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "../db";
 import type { Student } from "@prisma/client";
 
 export async function getOrCreateStudent(

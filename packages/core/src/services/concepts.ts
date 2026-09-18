@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "../db";
 import type { Concept } from "@prisma/client";
 
 /** Normalize a label: trim, lowercase, strip punctuation. */
