@@ -8,12 +8,13 @@
   "scripts": {
     "dev:bot": "npm run dev --workspace=apps/bot",
     "dev:web": "npm run dev --workspace=apps/web",
-    "build": "npm run build --workspaces",
+    "build": "npm run db:generate && npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:push": "node --env-file=.env ./node_modules/prisma/build/index.js db push --schema=packages/core/prisma/schema.prisma",
     "db:generate": "node --env-file=.env ./node_modules/prisma/build/index.js generate --schema=packages/core/prisma/schema.prisma",
     "db:seed": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs packages/core/prisma/seed.ts",
-    "register": "npm run register --workspace=apps/bot"
+    "register": "npm run register --workspace=apps/bot",
+    "postinstall": "npm run db:generate"
   },
   "engines": {
     "node": ">=20"
