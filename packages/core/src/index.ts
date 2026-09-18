@@ -12,5 +12,8 @@ export * from "./services/requests";
 export * from "./services/answers";
 export * from "./services/students";
 
+// Re-export Prisma types needed by web
+export type { ItemKind, StatusState, RequestState } from "@prisma/client";
+
 // LLM
 export * from "./llm";
