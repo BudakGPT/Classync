@@ -1,77 +1,73 @@
-import { auth } from "@/auth";
-import { getAnswersForGuild } from "@classync/core";
-import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { BookOpenText } from "lucide-react";
+import { getAnswersForGuild } from "@classync/core";
+import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
+import { fmtDateTime } from "@/lib/format";
+import { requireTaGuild } from "@/lib/session";
+import { plural } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ guildId: string }>;
 }
 
+type Answer = Awaited<ReturnType<typeof getAnswersForGuild>>[number];
+
+/** W5: every delivered answer, grouped by task. */
 export default async function KnowledgeBasePage({ params }: Props) {
   const { guildId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) redirect("/");
+  const { guild } = await requireTaGuild(guildId);
+  const answers = await getAnswersForGuild(guild.id);
 
-  const { prisma } = await import("@classync/core");
-  const guild = await prisma.guild.findUnique({ where: { id: guildId } });
-  if (!guild) notFound();
-  if (!guild.taUserIds.includes(session.user.id)) redirect("/guilds");
-
-  const answers = await getAnswersForGuild(guildId);
-
-  // Group by item
-  const byItem = new Map<string, { itemTitle: string; entries: typeof answers }>();
+  const byItem = new Map<string, { title: string; entries: Answer[] }>();
   for (const a of answers) {
-    const key = a.concept.item.id;
-    if (!byItem.has(key)) {
-      byItem.set(key, { itemTitle: a.concept.item.title, entries: [] });
-    }
-    byItem.get(key)!.entries.push(a);
+    const group = byItem.get(a.concept.item.id) ?? { title: a.concept.item.title, entries: [] };
+    group.entries.push(a);
+    byItem.set(a.concept.item.id, group);
   }
 
   return (
-    <main className="mx-auto max-w-3xl p-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link href={`/g/${guildId}`} className="text-sm text-gray-500 hover:text-white transition-colors">
-            ← Back to overview
-          </Link>
-          <h1 className="text-2xl font-bold mt-2">📚 Knowledge Base</h1>
-          <p className="text-gray-400 text-sm">All answers — accumulated for future students.</p>
-        </div>
-      </div>
-
+    <>
+      <PageHeader
+        title="Knowledge base"
+        subtitle="Every delivered answer, kept for the next student who reports the same concept."
+        actions={<Badge tone="emerald" size="md">{plural(answers.length, "answer")}</Badge>}
+      />
       {byItem.size === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-4xl mb-3">📭</p>
-          <p>No answers yet. Use <code className="bg-gray-800 px-1 rounded">/ta answer</code> or the concept page to post the first one.</p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={BookOpenText}
+            title="No answers yet"
+            description="Answer a concept from the overview, or use /ta answer in Discord. Delivered answers land here."
+          />
+        </Card>
       ) : (
-        <div className="space-y-8">
-          {Array.from(byItem.entries()).map(([itemId, { itemTitle, entries }]) => (
-            <section key={itemId}>
-              <h2 className="text-base font-semibold text-gray-300 mb-3 border-b border-gray-800 pb-2">
-                {itemTitle}
-              </h2>
-              <div className="space-y-3">
-                {entries.map((a) => (
-                  <div key={a.id} className="rounded-lg bg-gray-800 px-5 py-4">
-                    <p className="text-xs font-semibold text-indigo-400 mb-1 uppercase tracking-wide">
+        <div className="space-y-6">
+          {Array.from(byItem.entries()).map(([itemId, group]) => (
+            <Card key={itemId}>
+              <CardHeader
+                icon={BookOpenText}
+                tone="emerald"
+                title={<Link href={`/g/${guild.id}/items/${itemId}`} className="hover:underline">{group.title}</Link>}
+                subtitle={plural(group.entries.length, "answer")}
+              />
+              <ul className="mt-4 divide-y divide-line border-t border-line">
+                {group.entries.map((a) => (
+                  <li key={a.id} className="px-5 py-4">
+                    <Link href={`/g/${guild.id}/concepts/${a.concept.id}`} className="text-[11px] font-bold uppercase tracking-wider text-brand-700 hover:underline">
                       {a.concept.label}
+                    </Link>
+                    <p className="mt-1.5 whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink">{a.body}</p>
+                    <p className="mt-2 text-xs text-ink-3">
+                      Delivered to {plural(a.deliveredCount, "student")}
+                      {a.deliveredAt && ` · ${fmtDateTime(a.deliveredAt)}`}
                     </p>
-                    <p className="text-gray-200 whitespace-pre-wrap">{a.body}</p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Delivered to {a.deliveredCount} student(s)
-                      {a.deliveredAt &&
-                        ` · ${new Date(a.deliveredAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}`}
-                    </p>
-                  </div>
+                  </li>
                 ))}
-              </div>
-            </section>
+              </ul>
+            </Card>
           ))}
         </div>
       )}
-    </main>
+    </>
   );
 }

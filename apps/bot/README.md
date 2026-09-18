@@ -15,10 +15,8 @@ In the Discord Developer Portal, invite the bot with the `bot` and `applications
 | Permission | Why it is needed |
 | --- | --- |
 | `View Channel`, `Send Messages`, `Embed Links` | Private command responses, room opening posts, and canonical answers. |
-| `Create Public Threads`, `Send Messages in Threads` | Creates and replies in topic rooms. |
-| `Manage Threads` | Locks, archives, and explicitly reopens rooms. |
+| `Manage Channels` | Creates per-task categories and private concept-room channels, and applies permission overwrites. |
 | `Manage Messages` | Pins the canonical room answer; pinning is best-effort. |
-| `Manage Channels` | Needed only for `/setup create-forum`; not needed when an owner configures an existing forum. |
 
 ## Run locally
 
@@ -71,25 +69,24 @@ npm run dev:bot
 
 | Command | Who can use it | Purpose |
 | --- | --- | --- |
-| `/setup channel` | First caller: Manage Server; afterwards: Classync Owner | Registers announcements and claims Classync ownership. |
-| `/setup forum` | Classync Owner | Uses an existing forum, or a text/announcement channel as thread fallback. |
-| `/setup create-forum` | Classync Owner | Creates and configures `#classync-help`. |
+| `/setup channel` | First caller: Manage Server; afterwards: Classync Owner | Registers the announcement channel and claims Classync ownership. |
+| `/setup auto`, `/setup form`, `/setup panel` | Classync Owner | Provisions academic roles, categories and channels, and posts the quick-action panel. |
 | `/setup add-ta`, `/setup remove-ta`, `/setup list-ta`, `/setup transfer-owner` | Classync Owner | Manages TA access, lists registered TAs, and transfers ownership. |
-| `/tasks` | Students (not registered TAs) | Presents consent, then active private tasks for reporting Stuck, optionally joining a topic room, or explicitly requesting TA help. Tasks past their due date are hidden. |
+| `/tasks` | Students (not registered TAs) | Presents consent, then active private tasks with **In progress**, **Done**, **Stuck**, **Ask / Join Room** and **Request TA help**. Tasks past their due date are hidden. |
 | `/ta add-item` | Registered TA | Adds an item. Due dates are Jakarta-local (`YYYY-MM-DD` or `YYYY-MM-DD HH:mm`). |
 | `/ta queue` | Registered TA | Lists explicit help requests and topic-room state; names appear only for explicit requests. |
 | `/ta answer` | Registered TA | Stores a canonical answer, posts it to the room, and notifies explicit requesters. |
-| `/ta archive-room`, `/ta reopen-room` | Registered TA | Locks/archives a solved room, or explicitly reopens it. |
+| `/ta close-room`, `/ta reopen-room`, `/ta close-task-rooms` | Registered TA | Closes a room read-only after the due date, reopens it, or closes every room of a task (optionally deleting the Discord channels). |
 
 Discord allows at most five component rows per message. `/tasks` therefore lists up to ten tasks, then uses a task selector to open the status buttons for the selected item. This preserves the complete per-item flow within Discord's component limit.
 
 ## Privacy and delivery behavior
 
 - A `Student` row is not created until **I agree** is clicked.
-- A private **Stuck** report never names, joins, or exposes a student. At five unique reporters for an item/concept, the bot creates one anonymous topic room. It never exposes a sub-threshold count.
-- **Join discussion** is voluntary and first explains that membership/messages are visible to participants; it does not alter a private status or create a help request. Revoking consent cannot erase messages voluntarily posted in Discord.
+- A private **Stuck** report never names, joins, or exposes a student. At five unique reporters for an item/concept the reporter sees "N students flagged this"; below that only "Saved privately". Rooms are created by a student choosing **Ask / Join Room**, never from Stuck reports.
+- **Ask / Join Room** is voluntary and first explains that membership/messages are visible to participants; it does not alter a private status or create a help request. Revoking consent cannot erase messages voluntarily posted in Discord.
 - Requester names are visible only after an explicit **Request TA help** confirmation. The outbox worker starts immediately and repeats every 10 seconds; it posts/pins a canonical answer in the topic room and DMs only explicit requesters.
-- The reminder job runs every 15 minutes. It sends one DM per student/item for tasks due in the next 24 hours, with a **Still stuck** button.
+- The reminder job runs every 15 minutes. It sends one DM per student/item for tasks due in the next 24 hours, with **Done** and **Still stuck** buttons.
 - Closed DMs and pin failures are logged and do not abort delivery to other students.
 
 ## Validate

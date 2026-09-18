@@ -2,22 +2,20 @@
   "name": "@classync/core",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "scripts": {
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "typecheck": "tsc --noEmit"
+    "db:clear": "tsx prisma/clear.ts",
+    "db:reset": "prisma db push --force-reset",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.seed.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.56.0",
     "@prisma/client": "^6.0.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {

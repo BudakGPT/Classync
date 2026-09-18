@@ -20,6 +20,9 @@ export default {
         .addStringOption((opt) =>
           opt.setName("course_code").setDescription("Kode kelas (opsional)")
         )
+        .addBooleanOption((opt) =>
+          opt.setName("enable_auth").setDescription("Aktifkan gerbang verifikasi NPM (default: true)")
+        )
     )
     .addSubcommand((sub) =>
       sub

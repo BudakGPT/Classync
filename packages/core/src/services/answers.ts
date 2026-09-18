@@ -28,7 +28,7 @@ export async function getAnswerDeliveryContext(answerId: string) {
     include: {
       concept: {
         include: {
-          item: { include: { guild: { select: { announcementChannelId: true, discordGuildId: true } } } },
+          item: { include: { guild: { select: { discordGuildId: true } } } },
           topicRoom: true,
         },
       },
@@ -55,6 +55,25 @@ export async function getLatestAnswerForConcept(conceptId: string): Promise<Answ
     where: { conceptId },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/** Every answer on one concept, pending ones included, newest first (concept page). */
+export async function getAnswersForConcept(conceptId: string): Promise<Answer[]> {
+  return prisma.answer.findMany({ where: { conceptId }, orderBy: { createdAt: "desc" } });
+}
+
+/** Delivery state of one answer plus the guild it belongs to, for the web TA gate. */
+export async function getAnswerStatus(answerId: string) {
+  const answer = await prisma.answer.findUnique({
+    where: { id: answerId },
+    select: {
+      deliveredAt: true,
+      deliveredCount: true,
+      concept: { select: { item: { select: { guildId: true } } } },
+    },
+  });
+  if (!answer) return null;
+  return { deliveredAt: answer.deliveredAt, deliveredCount: answer.deliveredCount, guildId: answer.concept.item.guildId };
 }
 
 /** All answers grouped for the knowledge base page. */

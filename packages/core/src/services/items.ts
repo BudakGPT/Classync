@@ -8,7 +8,6 @@ const itemInputSchema = z.object({
   description: z.string().trim().max(2_000).optional(),
   dueAt: z.date().optional(),
   kind: z.enum(["ASSIGNMENT", "QUIZ", "EXAM", "READING"]).optional(),
-  sourceMessageId: z.string().min(1).optional(),
 });
 
 export async function createItem(params: {
@@ -17,7 +16,6 @@ export async function createItem(params: {
   description?: string;
   dueAt?: Date;
   kind?: ItemKind;
-  sourceMessageId?: string;
 }): Promise<Item> {
   return prisma.item.create({ data: itemInputSchema.parse(params) });
 }
@@ -41,6 +39,7 @@ export async function getItemsDueWithin(from: Date, until: Date): Promise<Item[]
   return prisma.item.findMany({ where: { dueAt: { gte: from, lte: until } } });
 }
 
+/** Student-facing list: newest first, max 10, past-due items hidden. */
 export async function getItemsByGuild(guildId: string): Promise<Item[]> {
   return prisma.item.findMany({
     // Keep undated items, but do not offer students tasks after their deadline.
@@ -54,6 +53,11 @@ export async function getItemsByGuild(guildId: string): Promise<Item[]> {
     orderBy: { createdAt: "desc" },
     take: 10,
   });
+}
+
+/** Every item in the guild, including past-due ones (TA dashboard tile and task list). */
+export async function countItemsByGuild(guildId: string): Promise<number> {
+  return prisma.item.count({ where: { guildId } });
 }
 
 export async function getItemById(id: string): Promise<Item | null> {

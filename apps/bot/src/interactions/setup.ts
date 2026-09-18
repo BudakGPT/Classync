@@ -20,6 +20,13 @@ import {
   transferGuildOwnership,
 } from "@classync/core";
 import { createQuickPanelEmbed, setupAcademicServer } from "../academicSetup.js";
+import { webUrl } from "../config.js";
+import { buildResetWarningEmbed, confirmRow, setPendingReset } from "./setupReset.js";
+
+// Re-export for index.ts
+export { handleSetupResetButton } from "./setupReset.js";
+
+// ── Permission check ──────────────────────────────────────────────────
 
 async function canManageSetup(interaction: ChatInputCommandInteraction | ModalSubmitInteraction): Promise<boolean> {
   if (!interaction.guildId || !interaction.guild) return false;
@@ -46,37 +53,35 @@ async function canManageSetup(interaction: ChatInputCommandInteraction | ModalSu
   return false;
 }
 
+// ── Detect existing setup ─────────────────────────────────────────────
+
+function isAlreadySetUp(interaction: ChatInputCommandInteraction | ModalSubmitInteraction): boolean {
+  const guild = interaction.guild;
+  if (!guild) return false;
+  return guild.channels.cache.some(
+    (c) => c.type === ChannelType.GuildCategory && c.name.includes("INFORMASI AKADEMIK"),
+  );
+}
+
+// ── Success embed ─────────────────────────────────────────────────────
+
 function buildSuccessEmbed(guildId: string, announceChannelId: string, courseName: string, courseCode: string) {
   return new EmbedBuilder()
     .setTitle("🎉 Setup Server Akademik Selesai!")
     .setDescription(
-      `Server Discord telah berhasil disiapkan sebagai ruang kelas akademik untuk **${courseName} (${courseCode})**.\n\n` +
-      `Seluruh channels, roles, kategori, dan panel pemanggilan interaktif telah dibuat.`
+      `Server Discord telah berhasil disiapkan untuk **${courseName} (${courseCode})**.` +
+      `\n\nSeluruh channels, roles, dan panel pemanggilan interaktif telah dibuat.`
     )
     .setColor(0x2ecc71)
     .addFields(
-      {
-        name: "📢 Channel Pengumuman",
-        value: `<#${announceChannelId}> (Khusus Dosen & TA)`,
-        inline: true,
-      },
-      {
-        name: "🏷️ Roles Akademik",
-        value: "• `@Dosen Pengampu`\n• `@Teaching Assistant`\n• `@Mahasiswa`",
-        inline: true,
-      },
-      {
-        name: "💻 Dashboard TA Web",
-        value: `[Buka Web Dashboard](http://localhost:3000/g/${guildId})`,
-        inline: true,
-      },
-      {
-        name: "📌 Panel Pemanggilan Classync",
-        value: "Panel tombol pemanggilan telah disematkan di `#pengumuman-tugas` dan `#tanya-jawab`. Mahasiswa dapat langsung menekan tombol tanpa perlu mengetik command.",
-      }
+      { name: "📢 Channel Pengumuman", value: `<#${announceChannelId}>`, inline: true },
+      { name: "🏷️ Roles Akademik", value: "`@Dosen Pengampu` · `@Teaching Assistant` · `@Mahasiswa`", inline: true },
+      { name: "💻 Dashboard TA Web", value: `[Buka](${webUrl()}/g/${guildId})`, inline: true },
     )
     .setFooter({ text: "Classync · Academic Server Provisioner" });
 }
+
+// ── Main /setup command handler ───────────────────────────────────────
 
 export async function handleSetupCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.guildId || !interaction.guild) {
@@ -91,104 +96,64 @@ export async function handleSetupCommand(interaction: ChatInputCommandInteractio
     return;
   }
 
-  const subcommand = interaction.options.getSubcommand();
+  const sub = interaction.options.getSubcommand();
 
-  if (subcommand === "form") {
-    const modal = new ModalBuilder()
-      .setCustomId("setup:academic-modal")
-      .setTitle("Setup Server Akademik");
-
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId("course_name")
-          .setLabel("Nama Mata Kuliah")
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder("misal: Pemrograman Berorientasi Objek")
-          .setRequired(true)
-          .setMaxLength(80)
-      ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId("course_code")
-          .setLabel("Kode / Kelas")
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder("misal: CS101-A")
-          .setRequired(true)
-          .setMaxLength(30)
-      )
-    );
-
-    await interaction.showModal(modal);
-    return;
-  }
-
-  if (subcommand === "auto") {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const courseName = interaction.options.getString("course_name") || interaction.guild.name;
-    const courseCode = interaction.options.getString("course_code") || "KELAS-A";
-
-    const result = await setupAcademicServer(interaction.client, interaction.guildId, interaction.user.id, {
-      courseName,
-      courseCode,
-    });
-
-    const dbGuild = await getGuildByDiscordId(interaction.guildId);
-    const announceId = result.announcementChannel?.id ?? dbGuild?.announcementChannelId ?? "";
-    const embed = buildSuccessEmbed(dbGuild?.id ?? "", announceId, courseName, courseCode);
-
-    await interaction.editReply({ embeds: [embed] });
-    return;
-  }
-
-  if (subcommand === "panel") {
-    const channel = interaction.channel;
-    if (!channel || channel.type !== ChannelType.GuildText) {
-      await interaction.reply({ content: "Jalankan di text channel.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const panel = createQuickPanelEmbed(interaction.guild.name, "AKADEMIK");
-    await channel.send(panel);
-    await interaction.reply({ content: "Panel pemanggilan Classync berhasil dikirim ke channel ini.", flags: MessageFlags.Ephemeral });
-    return;
-  }
-
-  if (subcommand === "channel") {
-    const channel = interaction.options.getChannel("channel", true);
-    if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
-      await interaction.reply({ content: "Pilih text atau announcement channel.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await setAnnouncementChannel(interaction.guildId, channel.id);
-    await interaction.reply({ content: `Channel pengumuman berhasil diatur ke <#${channel.id}>.`, flags: MessageFlags.Ephemeral });
-    return;
-  }
-
-  if (subcommand === "list-ta") {
-    const guild = await getGuildByDiscordId(interaction.guildId);
-    const taList = guild?.taUserIds ?? [];
-    await interaction.reply({
-      content: taList.length > 0 ? `## Registered TAs\n${taList.map((id) => `<@${id}>`).join("\n")}` : "Belum ada TA yang didaftarkan.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  if (subcommand === "add-ta" || subcommand === "remove-ta") {
-    const user = interaction.options.getUser("user", true);
-    if (subcommand === "add-ta") await addTaUser(interaction.guildId, user.id);
-    else await removeTaUser(interaction.guildId, user.id);
-    await interaction.reply({ content: `${user.username} ${subcommand === "add-ta" ? "sekarang adalah" : "bukan lagi"} TA di server ini.`, flags: MessageFlags.Ephemeral });
-    return;
-  }
-
-  if (subcommand === "transfer-owner") {
-    const user = interaction.options.getUser("user", true);
-    await transferGuildOwnership(interaction.guildId, user.id);
-    await interaction.reply({ content: `${user.username} sekarang adalah Classync Owner.`, flags: MessageFlags.Ephemeral });
-    return;
-  }
+  if (sub === "form") return void await handleForm(interaction);
+  if (sub === "auto") return void await handleAuto(interaction);
+  if (sub === "panel") return void await handlePanel(interaction);
+  if (sub === "channel") return void await handleChannel(interaction);
+  if (sub === "list-ta") return void await handleListTa(interaction);
+  if (sub === "add-ta" || sub === "remove-ta") return void await handleTaToggle(interaction, sub);
+  if (sub === "transfer-owner") return void await handleTransferOwner(interaction);
 }
+
+// ── /setup form ───────────────────────────────────────────────────────
+
+async function handleForm(interaction: ChatInputCommandInteraction): Promise<void> {
+  const modal = new ModalBuilder().setCustomId("setup:academic-modal").setTitle("Setup Server Akademik");
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      new TextInputBuilder().setCustomId("course_name").setLabel("Nama Mata Kuliah")
+        .setStyle(TextInputStyle.Short).setPlaceholder("misal: Pemrograman Berorientasi Objek")
+        .setRequired(true).setMaxLength(80),
+    ),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      new TextInputBuilder().setCustomId("course_code").setLabel("Kode / Kelas")
+        .setStyle(TextInputStyle.Short).setPlaceholder("misal: CS101-A")
+        .setRequired(true).setMaxLength(30),
+    ),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      new TextInputBuilder().setCustomId("auth_enabled").setLabel("Aktifkan Verifikasi Mahasiswa (NPM)?")
+        .setStyle(TextInputStyle.Short).setPlaceholder("ya / tidak (default: ya)")
+        .setRequired(false).setValue("ya").setMaxLength(10),
+    ),
+  );
+  await interaction.showModal(modal);
+}
+
+// ── /setup auto ───────────────────────────────────────────────────────
+
+async function handleAuto(interaction: ChatInputCommandInteraction): Promise<void> {
+  const courseName = interaction.options.getString("course_name") || interaction.guild!.name;
+  const courseCode = interaction.options.getString("course_code") || "KELAS-A";
+  const enableAuthOpt = interaction.options.getBoolean("enable_auth");
+  const enableAuth = enableAuthOpt ?? true;
+
+  if (isAlreadySetUp(interaction)) {
+    return void await showResetConfirmation(interaction, courseName, courseCode, enableAuth);
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const result = await setupAcademicServer(interaction.client, interaction.guildId!, interaction.user.id, {
+    courseName, courseCode, enableAuth,
+  });
+
+  const dbGuild = await getGuildByDiscordId(interaction.guildId!);
+  const announceId = result.announcementChannel?.id ?? dbGuild?.announcementChannelId ?? "";
+  await interaction.editReply({ embeds: [buildSuccessEmbed(dbGuild?.id ?? "", announceId, courseName, courseCode)] });
+}
+
+// ── Modal handler (from /setup form) ──────────────────────────────────
 
 export async function handleSetupModal(interaction: ModalSubmitInteraction): Promise<void> {
   if (interaction.customId !== "setup:academic-modal" || !interaction.guildId || !interaction.guild) return;
@@ -196,15 +161,87 @@ export async function handleSetupModal(interaction: ModalSubmitInteraction): Pro
 
   const courseName = interaction.fields.getTextInputValue("course_name");
   const courseCode = interaction.fields.getTextInputValue("course_code");
+  let enableAuth = true;
+  try {
+    const v = interaction.fields.getTextInputValue("auth_enabled")?.toLowerCase().trim();
+    if (v === "tidak" || v === "no" || v === "false") enableAuth = false;
+  } catch { /* optional field */ }
+
+  if (isAlreadySetUp(interaction)) {
+    setPendingReset(interaction.guildId, interaction.user.id, { courseName, courseCode, enableAuth });
+    await interaction.editReply({
+      embeds: [buildResetWarningEmbed(courseName, courseCode)],
+      components: [confirmRow("first")],
+    });
+    return;
+  }
 
   const result = await setupAcademicServer(interaction.client, interaction.guildId, interaction.user.id, {
-    courseName,
-    courseCode,
+    courseName, courseCode, enableAuth,
   });
 
   const dbGuild = await getGuildByDiscordId(interaction.guildId);
   const announceId = result.announcementChannel?.id ?? dbGuild?.announcementChannelId ?? "";
-  const embed = buildSuccessEmbed(dbGuild?.id ?? "", announceId, courseName, courseCode);
+  await interaction.editReply({ embeds: [buildSuccessEmbed(dbGuild?.id ?? "", announceId, courseName, courseCode)] });
+}
 
-  await interaction.editReply({ embeds: [embed] });
+// ── Reset confirmation trigger ────────────────────────────────────────
+
+async function showResetConfirmation(
+  interaction: ChatInputCommandInteraction,
+  courseName: string,
+  courseCode: string,
+  enableAuth: boolean,
+): Promise<void> {
+  setPendingReset(interaction.guildId!, interaction.user.id, { courseName, courseCode, enableAuth });
+  await interaction.reply({
+    embeds: [buildResetWarningEmbed(courseName, courseCode)],
+    components: [confirmRow("first")],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+// ── Other subcommands ─────────────────────────────────────────────────
+
+async function handlePanel(interaction: ChatInputCommandInteraction): Promise<void> {
+  const channel = interaction.channel;
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    await interaction.reply({ content: "Jalankan di text channel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await channel.send(createQuickPanelEmbed(interaction.guild?.name ?? "", "AKADEMIK"));
+  await interaction.reply({ content: "✅ Panel pemanggilan dikirim.", flags: MessageFlags.Ephemeral });
+}
+
+async function handleChannel(interaction: ChatInputCommandInteraction): Promise<void> {
+  const channel = interaction.options.getChannel("channel", true);
+  if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
+    await interaction.reply({ content: "Pilih text atau announcement channel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await setAnnouncementChannel(interaction.guildId!, channel.id);
+  await interaction.reply({ content: `Channel pengumuman → <#${channel.id}>.`, flags: MessageFlags.Ephemeral });
+}
+
+async function handleListTa(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guild = await getGuildByDiscordId(interaction.guildId!);
+  const list = guild?.taUserIds ?? [];
+  await interaction.reply({
+    content: list.length > 0 ? `## Registered TAs\n${list.map((id) => `<@${id}>`).join("\n")}` : "Belum ada TA.",
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleTaToggle(interaction: ChatInputCommandInteraction, sub: "add-ta" | "remove-ta"): Promise<void> {
+  const user = interaction.options.getUser("user", true);
+  if (sub === "add-ta") await addTaUser(interaction.guildId!, user.id);
+  else await removeTaUser(interaction.guildId!, user.id);
+  const verb = sub === "add-ta" ? "sekarang adalah" : "bukan lagi";
+  await interaction.reply({ content: `${user.username} ${verb} TA.`, flags: MessageFlags.Ephemeral });
+}
+
+async function handleTransferOwner(interaction: ChatInputCommandInteraction): Promise<void> {
+  const user = interaction.options.getUser("user", true);
+  await transferGuildOwnership(interaction.guildId!, user.id);
+  await interaction.reply({ content: `${user.username} sekarang Classync Owner.`, flags: MessageFlags.Ephemeral });
 }

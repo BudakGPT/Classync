@@ -11,3 +11,8 @@ export function requiredEnv(name: "DISCORD_TOKEN" | "DISCORD_CLIENT_ID" | "DISCO
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
+
+/** Public dashboard origin used in embeds. Falls back to the local dev server. */
+export function webUrl(): string {
+  return (process.env.WEB_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
+}

@@ -34,16 +34,6 @@ export async function addTaUser(
   });
 }
 
-export async function setHelpForumChannel(
-  discordGuildId: string,
-  channelId: string
-): Promise<Guild> {
-  return prisma.guild.update({
-    where: { discordGuildId },
-    data: { helpForumChannelId: channelId },
-  });
-}
-
 /** Atomically claims an unowned guild. Returns the existing owner when already claimed. */
 export async function claimGuildOwnership(
   discordGuildId: string,
@@ -102,4 +92,29 @@ export async function isTa(
 ): Promise<boolean> {
   const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
   return guild?.taUserIds.includes(discordUserId) ?? false;
+}
+
+/**
+ * Wipes all guild-related data (roster, items→concepts→answers→rooms, students)
+ * but preserves the Guild row itself (owner, TAs stay).
+ * Resets auth-related fields so a fresh /setup can recreate them.
+ */
+export async function resetGuildData(discordGuildId: string): Promise<void> {
+  const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
+  if (!guild) return;
+
+  await prisma.$transaction([
+    prisma.academicRoster.deleteMany({ where: { guildId: guild.id } }),
+    prisma.item.deleteMany({ where: { guildId: guild.id } }),
+    prisma.student.deleteMany({ where: { guildId: guild.id } }),
+    prisma.guild.update({
+      where: { id: guild.id },
+      data: {
+        announcementChannelId: null,
+        authChannelId: null,
+        authEnabled: false,
+        verifiedRoleId: null,
+      },
+    }),
+  ]);
 }

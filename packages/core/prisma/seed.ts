@@ -7,12 +7,16 @@ async function main() {
   console.log("🌱 Seeding database...");
 
   // Clean slate
+  await prisma.match.deleteMany();
+  await prisma.topicRoomMember.deleteMany();
+  await prisma.topicRoom.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.helpRequest.deleteMany();
   await prisma.itemStatus.deleteMany();
   await prisma.concept.deleteMany();
   await prisma.item.deleteMany();
   await prisma.student.deleteMany();
+  await prisma.academicRoster.deleteMany();
   await prisma.guild.deleteMany();
 
   // === GUILD ===
@@ -150,6 +154,7 @@ async function main() {
   // === HELP REQUESTS ===
   // concept1: 3 OPEN requests (including 1 real account so dashboard shows real name)
   const requesters = [students[0], students[1], students[2]]; // first is real TA account
+  const requesterNames = ["Mahasiswa Satu", "Mahasiswa Dua", "Mahasiswa Tiga"];
   await Promise.all(
     requesters.map((student) =>
       prisma.helpRequest.create({
@@ -157,6 +162,7 @@ async function main() {
           conceptId: concept1.id,
           studentId: student.id,
           state: RequestState.OPEN,
+          displayName: requesterNames[requesters.indexOf(student)],
           createdAt: subHours(new Date(), requesters.indexOf(student) * 2),
         },
       })
@@ -179,6 +185,7 @@ async function main() {
       conceptId: concept2.id,
       studentId: students[9].id,
       state: RequestState.ANSWERED,
+      displayName: "Mahasiswa Sepuluh",
     },
   });
 

@@ -1,15 +1,25 @@
 import { prisma } from "../db";
 import type { HelpRequest } from "@prisma/client";
+import { z } from "zod";
 
+const displayNameSchema = z.string().trim().min(1).max(100).optional();
+
+/**
+ * Explicit, identity-revealing escalation. `displayName` is the student's guild display name
+ * at the moment they confirmed; it is the only path a name reaches the TA dashboard and it is
+ * deleted with the request on consent revocation.
+ */
 export async function createHelpRequest(
   conceptId: string,
-  studentId: string
+  studentId: string,
+  displayName?: string
 ): Promise<HelpRequest> {
+  const name = displayNameSchema.parse(displayName) ?? null;
   return prisma.helpRequest.upsert({
     where: { conceptId_studentId: { conceptId, studentId } },
     // Reopening resets the request window used by the outbox delivery worker.
-    update: { state: "OPEN", createdAt: new Date() },
-    create: { conceptId, studentId },
+    update: { state: "OPEN", createdAt: new Date(), displayName: name },
+    create: { conceptId, studentId, displayName: name },
   });
 }
 
@@ -77,6 +87,7 @@ export async function getTaQueue(guildId: string) {
       item: concept.item,
       requesters: concept.helpRequests.map((request) => ({
         discordUserId: request.student.discordUserId,
+        displayName: request.displayName,
         createdAt: request.createdAt,
       })),
       topicRoom: concept.topicRoom,

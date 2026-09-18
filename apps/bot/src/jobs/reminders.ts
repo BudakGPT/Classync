@@ -2,8 +2,10 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Client } from "disco
 import cron from "node-cron";
 import { getItemsDueWithin, getReminderRecipients, markReminded } from "@classync/core";
 
+/** PRD B5: Done and Still stuck, so the reminder funnels into the private status flow. */
 function reminderComponents(itemId: string) {
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`reminder:done:${itemId}`).setLabel("Done").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`reminder:stuck:${itemId}`).setLabel("Still stuck").setStyle(ButtonStyle.Danger),
   )];
 }

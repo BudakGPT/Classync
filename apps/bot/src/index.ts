@@ -4,17 +4,24 @@ import {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  Partials,
   type Interaction,
 } from "discord.js";
+import announceall from "./commands/announceall.js";
 import setup from "./commands/setup.js";
 import ta from "./commands/ta.js";
 import tasks from "./commands/tasks.js";
 import { requiredEnv } from "./config.js";
-import { handleTaskInteraction } from "./interactions/tasks.js";
+import { handleHelperToggle } from "./interactions/helper.js";
+import { handleMatchButton } from "./interactions/match.js";
+import { handleDirectMessage } from "./interactions/relay.js";
 import { handleReminderInteraction } from "./interactions/reminders.js";
-import { handleSetupModal } from "./interactions/setup.js";
+import { handleSetupModal, handleSetupResetButton } from "./interactions/setup.js";
+import { handleVerificationButton, handleVerificationModal } from "./interactions/verification.js";
 import { handleTaAutocomplete } from "./interactions/ta.js";
+import { handleTaskInteraction } from "./interactions/tasks.js";
 import { startDeliverJob } from "./jobs/deliver.js";
+import { startMatchExpiryJob } from "./jobs/matchExpiry.js";
 import { startReminderJob } from "./jobs/reminders.js";
 import { handleTopicRoomMessage } from "./notifications.js";
 
@@ -22,6 +29,7 @@ const commands = new Map([
   [setup.data.name, setup],
   [tasks.data.name, tasks],
   [ta.data.name, ta],
+  [announceall.data.name, announceall],
 ]);
 
 const client = new Client({
@@ -30,6 +38,8 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
   ],
+  // Required for messageCreate to fire in DMs (peer-match relay).
+  partials: [Partials.Channel],
 });
 
 async function reportInteractionError(interaction: Interaction): Promise<void> {
@@ -49,6 +59,7 @@ client.once(Events.ClientReady, (readyClient) => {
   console.log(`Classync bot ready: ${readyClient.user.tag}`);
   startDeliverJob(readyClient);
   startReminderJob(readyClient);
+  startMatchExpiryJob(readyClient);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -63,11 +74,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton()) {
+      const prefix = interaction.customId.split(":")[0];
+      if (prefix === "setup") return void await handleSetupResetButton(interaction);
+      if (prefix === "auth") return void await handleVerificationButton(interaction);
+      if (prefix === "match") return void await handleMatchButton(interaction);
+      if (prefix === "helper") return void await handleHelperToggle(interaction);
       if (await handleTaskInteraction(interaction)) return;
       await handleReminderInteraction(interaction);
       return;
     }
     if (interaction.isModalSubmit()) {
+      if (await handleVerificationModal(interaction)) return;
       if (interaction.customId === "setup:academic-modal") {
         await handleSetupModal(interaction);
         return;
@@ -87,6 +104,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
+  if (!message.guildId) {
+    // DM: peer-match relay. Text is forwarded, never stored.
+    await handleDirectMessage(client, message).catch((err) => {
+      console.error("[messageCreate] Error relaying DM", err);
+    });
+    return;
+  }
   await handleTopicRoomMessage(client, message).catch((err) => {
     console.error("[messageCreate] Error handling room message", err);
   });

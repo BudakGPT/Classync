@@ -12,9 +12,12 @@ import {
   getLatestAnswerForConcept,
   getMyStatus,
   getMyStatusMap,
+  getStuckCount,
 } from "@classync/core";
 
-type StudentRef = { id: string };
+/** Structural types so the bot never imports @prisma/client. */
+export type StudentRef = { id: string; helperOptIn: boolean };
+export type ItemRef = { id: string; guildId: string; title: string; kind: string; dueAt: Date | null };
 
 const statusEmoji: Record<string, string> = {
   NONE: "⚪",
@@ -37,18 +40,26 @@ export function consentScreen() {
       "## Your privacy comes first",
       "Classync stores your Discord ID, your private task statuses, and any TA-help requests or concept rooms you join.",
       "Your statuses are visible only to you. When you join a private concept room, all members and TAs in that room can see your Discord identity and messages. You can delete your data anytime with **Privacy**.",
+      "If you opt in to help classmates, other students may be told you finished an item. Your name is never shown unless you reveal it.",
     ].join("\n\n"),
     components: [row],
   };
 }
 
-export async function taskListScreen(guildId: string, student: StudentRef) {
-  const items = await getItemsByGuild(guildId);
-  const privacyRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+function privacyRow(student: StudentRef) {
+  const helper = student.helperOptIn
+    ? new ButtonBuilder().setCustomId("helper:optout").setLabel("🤝 Help classmates: on").setStyle(ButtonStyle.Success)
+    : new ButtonBuilder().setCustomId("helper:optin").setLabel("🤝 Help classmates: off").setStyle(ButtonStyle.Secondary);
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    helper,
     new ButtonBuilder().setCustomId("task:privacy").setLabel("Privacy / delete my data").setStyle(ButtonStyle.Danger),
   );
+}
+
+export async function taskListScreen(guildId: string, student: StudentRef) {
+  const items = await getItemsByGuild(guildId);
   if (items.length === 0) {
-    return { content: "## Your tasks\nNo tasks yet. Ask a TA to add one.", components: [privacyRow] };
+    return { content: "## Your tasks\nNo tasks yet. Ask a TA to add one.", components: [privacyRow(student)] };
   }
 
   const statuses = await getMyStatusMap(items.map((item) => item.id), student.id);
@@ -67,10 +78,11 @@ export async function taskListScreen(guildId: string, student: StudentRef) {
 
   return {
     content: `## Your tasks\n${lines.join("\n")}\n\nChoose a task below to update its status or enter a concept room.`,
-    components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(picker), privacyRow],
+    components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(picker), privacyRow(student)],
   };
 }
 
+/** Task detail: private status buttons on the first row, escalation paths on the second (PRD B2). */
 export async function taskDetailScreen(itemId: string, student: StudentRef, notice?: string) {
   const item = await getItemById(itemId);
   if (!item) return { content: "That task no longer exists.", components: [] };
@@ -78,9 +90,13 @@ export async function taskDetailScreen(itemId: string, student: StudentRef, noti
   const state = status?.state ?? "NONE";
   const due = item.dueAt ? `<t:${Math.floor(item.dueAt.getTime() / 1000)}:F>` : "No due date";
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const statusRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:progress:${item.id}`).setLabel("In progress").setStyle(ButtonStyle.Primary).setDisabled(state === "IN_PROGRESS"),
+    new ButtonBuilder().setCustomId(`task:done:${item.id}`).setLabel("Done").setStyle(ButtonStyle.Success).setDisabled(state === "DONE"),
     new ButtonBuilder().setCustomId(`task:stuck:${item.id}`).setLabel("Stuck").setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`task:room:${item.id}`).setLabel("Ask / Join Room").setStyle(ButtonStyle.Primary),
+  );
+  const escalationRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`task:room:${item.id}`).setLabel("Ask / Join Room").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`task:help:${item.id}`).setLabel("Request TA help").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`task:back:${item.id}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
   );
@@ -92,7 +108,7 @@ export async function taskDetailScreen(itemId: string, student: StudentRef, noti
       `**Your private status:** ${statusEmoji[state] ?? "⚪"} ${state}`,
       notice ? `\n${notice}` : "",
     ].join("\n"),
-    components: [actionRow],
+    components: [statusRow, escalationRow],
   };
 }
 
@@ -110,7 +126,7 @@ export async function conceptPickerScreen(itemId: string) {
     new ButtonBuilder().setCustomId(`task:detail:${itemId}`).setLabel("Back").setStyle(ButtonStyle.Secondary),
   );
   return {
-    content: "Choose an existing concept or type a new one. This saves your Stuck status privately.",
+    content: "Choose an existing concept or type a new one. This saves your Stuck status privately and offers you to a classmate who finished it.",
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(picker), back],
   };
 }
@@ -151,10 +167,14 @@ export function roomConfirmScreen(itemId: string, itemTitle: string, conceptId: 
   };
 }
 
+/**
+ * Threshold message after saving Stuck: the honest total ("N students flagged this") only when
+ * >= 5 reporters (privacy floor), plus any stored TA answer. Wording per DEMO_SCRIPT §5.
+ */
 export async function stuckNotice(conceptId: string): Promise<string> {
+  const count = await getStuckCount(conceptId);
   const answer = await getLatestAnswerForConcept(conceptId);
-  const answerMessage = answer
-    ? `\n\n**A TA already answered this topic:**\n${truncate(answer.body, 1_200)}`
-    : "";
-  return `Saved privately. You can click **Ask / Join Room** to enter the discussion room.${answerMessage}`;
+  const countLine = count === null ? "Saved privately." : `🔴 **${count} students flagged this.** You are not alone.`;
+  const answerLine = answer ? `\n\n**A TA already answered this topic:**\n${truncate(answer.body, 1_200)}` : "";
+  return `${countLine} You can click **Ask / Join Room** to enter the discussion room.${answerLine}`;
 }
