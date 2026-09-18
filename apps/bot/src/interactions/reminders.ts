@@ -1,6 +1,6 @@
 import { MessageFlags, type ButtonInteraction } from "discord.js";
 import { conceptPickerScreen } from "../ui/tasks.js";
-import { contextForItem } from "./tasks.js";
+import { contextForItem } from "./taskContext.js";
 
 export async function handleReminderInteraction(interaction: ButtonInteraction): Promise<boolean> {
   if (!interaction.customId.startsWith("reminder:")) return false;

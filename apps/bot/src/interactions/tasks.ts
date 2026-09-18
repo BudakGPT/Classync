@@ -1,7 +1,4 @@
 import {
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -11,53 +8,25 @@ import {
   type StringSelectMenuInteraction,
 } from "discord.js";
 import {
-  createHelpRequest,
   getConsentedStudent,
   getGuildByDiscordId,
-  getItemById,
-  getOrCreateConcept,
   getOrCreateStudent,
-  getConceptById,
   getStudentJoinedRoomChannels,
   getTaQueue,
   isTa,
   giveConsent,
-  normalizeLabel,
   revokeAndDelete,
-  setStatus,
 } from "@classync/core";
-import { conceptPickerScreen, consentScreen, taskDetailScreen, taskListScreen, stuckNotice } from "../ui/tasks.js";
+import { conceptPickerScreen, consentScreen, taskDetailScreen, taskListScreen } from "../ui/tasks.js";
 import { revokeStudentRoomAccess } from "../topicRooms.js";
 import { handleRoomButton, handleRoomModal, handleRoomSelect } from "./rooms.js";
-
-type TaskComponent = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
-
-export async function contextForItem(itemId: string, userId: string, interactionGuildId: string | null) {
-  const item = await getItemById(itemId);
-  if (!item) return null;
-  if (interactionGuildId !== null) {
-    const guild = await getGuildByDiscordId(interactionGuildId);
-    if (!guild || item.guildId !== guild.id) return null;
-    if (await isTa(interactionGuildId, userId)) return null;
-  }
-  if (item.dueAt && item.dueAt.getTime() < Date.now()) return null;
-  const student = await getConsentedStudent(item.guildId, userId);
-  return student ? { item, student } : null;
-}
+import { contextForItem, type TaskComponent } from "./taskContext.js";
+import { handleHelpButton, openConceptModal, saveNewConcept, saveStuck } from "./tasksStuck.js";
 
 async function refreshDetail(interaction: ButtonInteraction | StringSelectMenuInteraction, itemId: string, notice?: string) {
   const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
   if (!context) return interaction.followUp({ content: "Open `/tasks` in the class server first.", flags: MessageFlags.Ephemeral });
   return interaction.editReply(await taskDetailScreen(itemId, context.student, notice));
-}
-
-async function saveStuck(interaction: StringSelectMenuInteraction, itemId: string, conceptId: string) {
-  const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
-  if (!context) return interaction.followUp({ content: "This task is unavailable.", flags: MessageFlags.Ephemeral });
-  const concept = await getConceptById(conceptId);
-  if (!concept || concept.itemId !== itemId) return interaction.followUp({ content: "That concept is unavailable.", flags: MessageFlags.Ephemeral });
-  await setStatus(itemId, context.student.id, "STUCK", concept.id);
-  return interaction.editReply(await taskDetailScreen(itemId, context.student, await stuckNotice(concept.id)));
 }
 
 async function handleConsent(interaction: ButtonInteraction): Promise<void> {
@@ -98,7 +67,7 @@ async function handlePrivacy(interaction: ButtonInteraction): Promise<void> {
       new ButtonBuilder().setCustomId("task:privacy-cancel").setLabel("Cancel").setStyle(ButtonStyle.Secondary),
     );
     await interaction.editReply({
-      content: "Delete all of your statuses, room memberships, and TA-help requests in this server, and revoke consent? This cannot be undone.",
+      content: "Delete all of your statuses, room memberships, peer matches, and TA-help requests in this server, and revoke consent? This cannot be undone.",
       components: [row],
     });
     return;
@@ -113,71 +82,39 @@ async function handlePrivacy(interaction: ButtonInteraction): Promise<void> {
   await interaction.editReply(await taskListScreen(guild.id, student));
 }
 
-async function handleButton(interaction: ButtonInteraction): Promise<void> {
-  if (interaction.customId.startsWith("task:consent:")) return handleConsent(interaction);
-  if (interaction.customId.startsWith("task:privacy")) return handlePrivacy(interaction);
-
-  if (interaction.customId === "task:panel-tasks" || interaction.customId === "task:panel-ask") {
-    if (!interaction.guildId) return;
-    const guild = await getGuildByDiscordId(interaction.guildId);
-    if (!guild) return;
-    const student = await getConsentedStudent(guild.id, interaction.user.id);
-    if (!student) {
-      await interaction.editReply(consentScreen());
-      return;
-    }
-    await interaction.editReply(await taskListScreen(guild.id, student));
-    return;
-  }
-
+async function handlePanel(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.guildId) return;
+  const guild = await getGuildByDiscordId(interaction.guildId);
+  if (!guild) return;
   if (interaction.customId === "task:panel-ta") {
-    if (!interaction.guildId) return;
     if (!await isTa(interaction.guildId, interaction.user.id)) {
       await interaction.editReply({ content: "Menu ini dikhususkan untuk Dosen & Asisten Dosen (TA) yang terdaftar." });
       return;
     }
-    const guild = await getGuildByDiscordId(interaction.guildId);
-    const queue = guild ? await getTaQueue(guild.id) : [];
+    const queue = await getTaQueue(guild.id);
     await interaction.editReply({
-      content: `🧑‍🏫 **TA Dashboard & Queue**\nAntrean saat ini: **${queue.length} topik**.\nGunakan command \`/ta queue\` untuk melihat antrean lengkap di Discord, atau [Buka Web Dashboard](http://localhost:3000/g/${guild?.id}).`,
+      content: `🧑‍🏫 **TA Dashboard & Queue**\nAntrean saat ini: **${queue.length} topik**.\nGunakan command \`/ta queue\` untuk melihat antrean lengkap di Discord, atau [Buka Web Dashboard](http://localhost:3000/g/${guild.id}).`,
     });
     return;
   }
+  const student = await getConsentedStudent(guild.id, interaction.user.id);
+  await interaction.editReply(student ? await taskListScreen(guild.id, student) : consentScreen());
+}
 
+async function handleButton(interaction: ButtonInteraction): Promise<void> {
+  if (interaction.customId.startsWith("task:consent:")) return handleConsent(interaction);
+  if (interaction.customId.startsWith("task:privacy")) return handlePrivacy(interaction);
+  if (interaction.customId.startsWith("task:panel-")) return handlePanel(interaction);
   if (await handleRoomButton(interaction)) return;
 
   const [, action, itemId, state] = interaction.customId.split(":");
   if (!itemId) return;
+  if (action === "help" || action === "help-confirm") return handleHelpButton(interaction, action, itemId, state);
+
   const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
   if (!context) return void await interaction.followUp({ content: "Open `/tasks` in the class server first.", flags: MessageFlags.Ephemeral });
-
-  if (action === "back") return void await interaction.editReply(await taskListScreen(context.item.guildId, context.student));
-  if (action === "stuck") {
-    await interaction.editReply(await conceptPickerScreen(itemId));
-    return;
-  }
-  if (action === "help") {
-    const status = await import("@classync/core").then(({ getMyStatus }) => getMyStatus(itemId, context.student.id));
-    if (!status?.conceptId) {
-      await interaction.editReply(await taskDetailScreen(itemId, context.student, "Choose **Stuck** and a concept before requesting TA help."));
-      return;
-    }
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(`task:help-confirm:${itemId}:${status.conceptId}`).setLabel("Confirm request").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`task:detail:${itemId}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
-    );
-    await interaction.editReply({
-      content: "Your name will be visible to the TA for this item only. Do you want to request help?",
-      components: [row],
-    });
-    return;
-  }
-  if (action === "help-confirm" && state) {
-    const concept = await getConceptById(state);
-    if (!concept || concept.itemId !== itemId) return void await interaction.followUp({ content: "That concept is unavailable.", flags: MessageFlags.Ephemeral });
-    await createHelpRequest(concept.id, context.student.id);
-    await interaction.editReply(await taskDetailScreen(itemId, context.student, "Your TA-help request was sent."));
-  }
+  if (action === "back") await interaction.editReply(await taskListScreen(context.item.guildId, context.student));
+  else if (action === "stuck") await interaction.editReply(await conceptPickerScreen(itemId));
 }
 
 async function handleSelect(interaction: StringSelectMenuInteraction): Promise<void> {
@@ -189,32 +126,15 @@ async function handleSelect(interaction: StringSelectMenuInteraction): Promise<v
 
   const [, action, itemId] = interaction.customId.split(":");
   if (action !== "concept" || !itemId) return;
-  if (interaction.values[0] === "new") {
-    const modal = new ModalBuilder().setCustomId(`task:new-concept:${itemId}`).setTitle("What are you stuck on?");
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(
-      new TextInputBuilder().setCustomId("label").setLabel("Concept label").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(80),
-    ));
-    await interaction.showModal(modal);
-    return;
-  }
+  if (interaction.values[0] === "new") return openConceptModal(interaction, itemId);
   await saveStuck(interaction, itemId, interaction.values[0]);
 }
 
 async function handleModal(interaction: ModalSubmitInteraction): Promise<void> {
   if (await handleRoomModal(interaction)) return;
-
   const [, action, itemId] = interaction.customId.split(":");
   if (action !== "new-concept" || !itemId) return;
-  const context = await contextForItem(itemId, interaction.user.id, interaction.guildId);
-  if (!context) return void await interaction.editReply({ content: "This task is unavailable.", components: [] });
-  const rawLabel = interaction.fields.getTextInputValue("label");
-  if (normalizeLabel(rawLabel).length === 0) {
-    await interaction.editReply({ content: "Enter at least one letter or number for the concept.", components: [] });
-    return;
-  }
-  const concept = await getOrCreateConcept(itemId, rawLabel);
-  await setStatus(itemId, context.student.id, "STUCK", concept.id);
-  await interaction.editReply(await taskDetailScreen(itemId, context.student, await stuckNotice(concept.id)));
+  await saveNewConcept(interaction, itemId);
 }
 
 export async function handleTaskInteraction(interaction: TaskComponent): Promise<boolean> {
@@ -242,4 +162,3 @@ export async function handleTaskInteraction(interaction: TaskComponent): Promise
   else if (interaction.isStringSelectMenu()) await handleSelect(interaction);
   return true;
 }
-
