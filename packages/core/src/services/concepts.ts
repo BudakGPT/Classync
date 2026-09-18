@@ -1,17 +1,21 @@
 import { prisma } from "../db";
 import type { Concept } from "@prisma/client";
+import { z } from "zod";
 
 /** Normalize a label: trim, lowercase, strip punctuation. */
 export function normalizeLabel(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
 }
 
+const conceptLabelSchema = z.string().trim().min(1).max(80);
+
 /** Get or create a concept for an item+label pair. */
 export async function getOrCreateConcept(
   itemId: string,
   rawLabel: string
 ): Promise<Concept> {
-  const label = normalizeLabel(rawLabel);
+  const label = normalizeLabel(conceptLabelSchema.parse(rawLabel));
+  if (label.length === 0) throw new Error("Concept label must contain letters or numbers.");
   return prisma.concept.upsert({
     where: { itemId_label: { itemId, label } },
     update: {},
