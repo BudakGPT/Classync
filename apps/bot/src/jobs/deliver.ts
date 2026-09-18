@@ -1,79 +1,60 @@
 import type { Client } from "discord.js";
-import { getPendingAnswers, stampDelivered, getConceptById, getItemById, getOpenRequestsForConcept } from "@classync/core";
+import { getAnswerDeliveryContext, getAnsweredRequestsForDelivery, getPendingAnswers, stampDelivered } from "@classync/core";
 
 const POLL_INTERVAL_MS = 10_000;
+let running = false;
 
-export function startDeliverJob(client: Client) {
-  setInterval(async () => {
-    try {
-      await deliverPending(client);
-    } catch (err) {
-      console.error("[deliver] Error:", err);
-    }
-  }, POLL_INTERVAL_MS);
-
-  console.log("📬 Deliver job started (every 10s)");
+export function startDeliverJob(client: Client): void {
+  void deliverPending(client);
+  setInterval(() => void deliverPending(client), POLL_INTERVAL_MS);
+  console.log("Deliver job started (every 10s)");
 }
 
-async function deliverPending(client: Client) {
-  const pending = await getPendingAnswers();
-  if (pending.length === 0) return;
+async function sendPinnedAnswer(client: Client, channelId: string | null, guildId: string, content: string): Promise<string | undefined> {
+  if (!channelId) return undefined;
+  const guild = await client.guilds.fetch(guildId).catch(() => null);
+  if (!guild) return undefined;
+  const channel = await guild.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isSendable()) return undefined;
+  const message = await channel.send(content);
+  await message.pin().catch(() => undefined);
+  return message.id;
+}
 
-  for (const answer of pending) {
-    const concept = await getConceptById(answer.conceptId);
-    if (!concept) continue;
-
-    const item = await getItemById(concept.itemId);
-    if (!item) continue;
-
-    // Get requesters BEFORE marking answered (already marked, get ANSWERED state)
-    // We store discordUserIds from the open requests captured when answer was created
-    // Re-fetch all ANSWERED requests for this concept that don't have delivery yet
-    const guild = await client.guilds.fetch(item.guildId).catch(() => null);
-    if (!guild) continue;
-
-    // Fetch students with ANSWERED requests for this concept
-    const { prisma } = await import("@classync/core");
-    const recipients = await prisma.helpRequest.findMany({
-      where: { conceptId: answer.conceptId, state: "ANSWERED" },
-      include: { student: { select: { discordUserId: true } } },
-    });
-
-    let deliveredCount = 0;
-    let pinnedMessageId: string | undefined;
-
-    // DM each student
-    for (const req of recipients) {
-      try {
-        const user = await client.users.fetch(req.student.discordUserId);
-        await user.send(
-          `📚 **TA answered your question on: ${item.title}**\n\n**Topic:** ${concept.label}\n\n${answer.body}`
-        );
-        deliveredCount++;
-      } catch {
-        // Closed DMs — log and skip, never throw
-        console.warn(`[deliver] Cannot DM ${req.student.discordUserId} (DMs closed)`);
-      }
-    }
-
-    // Pin answer in announcement channel
-    const guildData = await prisma.guild.findUnique({ where: { id: item.guildId } });
-    if (guildData?.announcementChannelId) {
-      try {
-        const channel = await guild.channels.fetch(guildData.announcementChannelId);
-        if (channel?.isTextBased()) {
-          const msg = await channel.send(
-            `📌 **Answer for: ${item.title}**\n**Topic:** ${concept.label}\n\n${answer.body}\n\n_Delivered to ${deliveredCount} student(s)_`
-          );
-          pinnedMessageId = msg.id;
-          await msg.pin().catch(() => {}); // Pin may fail if no permission — ok
+export async function deliverPending(client: Client): Promise<void> {
+  if (running) return;
+  running = true;
+  try {
+    for (const answer of await getPendingAnswers()) {
+      const context = await getAnswerDeliveryContext(answer.id);
+      if (!context || context.deliveredAt) continue;
+      const { concept } = context;
+      const item = concept.item;
+      let deliveredCount = 0;
+      for (const request of await getAnsweredRequestsForDelivery(concept.id, answer.createdAt)) {
+        try {
+          const user = await client.users.fetch(request.student.discordUserId);
+          await user.send(`📚 **TA answered: ${item.title}**\n\n**Topic:** ${concept.label}\n\n${answer.body}`);
+          deliveredCount += 1;
+        } catch {
+          console.warn(`[deliver] Cannot DM requester ${request.student.discordUserId}`);
         }
-      } catch (err) {
-        console.warn("[deliver] Could not pin:", err);
       }
+      const pinnedMessageId = await sendPinnedAnswer(
+        client,
+        item.guild.announcementChannelId,
+        item.guild.discordGuildId,
+        `📌 **Answer for: ${item.title}**\n**Topic:** ${concept.label}\n\n${answer.body}`,
+      ).catch((error: unknown) => {
+        console.warn("[deliver] Could not post pinned answer", error);
+        return undefined;
+      });
+      await stampDelivered(answer.id, deliveredCount, pinnedMessageId);
+      console.log(`[deliver] Answer ${answer.id} delivered to ${deliveredCount} requester(s)`);
     }
-
-    await stampDelivered(answer.id, deliveredCount, pinnedMessageId);
-    console.log(`[deliver] Answer ${answer.id} delivered to ${deliveredCount} students`);
+  } catch (error) {
+    console.error("[deliver] Error", error);
+  } finally {
+    running = false;
   }
 }

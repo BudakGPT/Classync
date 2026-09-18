@@ -40,6 +40,10 @@ export async function getGuildByDiscordId(
   return prisma.guild.findUnique({ where: { discordGuildId } });
 }
 
+export async function getGuildById(id: string): Promise<Guild | null> {
+  return prisma.guild.findUnique({ where: { id } });
+}
+
 /** Returns all guilds where the given Discord user ID is a TA. */
 export async function getGuildsForTa(discordUserId: string): Promise<Guild[]> {
   return prisma.guild.findMany({

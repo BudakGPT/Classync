@@ -49,3 +49,10 @@ export async function getMyStatuses(
     include: { item: true },
   });
 }
+
+export async function getMyStatusMap(itemIds: string[], studentId: string): Promise<Map<string, ItemStatus>> {
+  const statuses = await prisma.itemStatus.findMany({
+    where: { itemId: { in: itemIds }, studentId },
+  });
+  return new Map(statuses.map((status) => [status.itemId, status]));
+}

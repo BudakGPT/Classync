@@ -1,5 +1,6 @@
 import { prisma } from "../db.js";
 import type { Answer } from "@prisma/client";
+import { z } from "zod";
 
 /** Create an answer (outbox: deliveredAt = null). Bot deliver job will stamp it. */
 export async function createAnswer(params: {
@@ -7,12 +8,31 @@ export async function createAnswer(params: {
   authorUserId: string;
   body: string;
 }): Promise<Answer> {
-  return prisma.answer.create({ data: params });
+  const parsed = z.object({
+    conceptId: z.string().min(1),
+    authorUserId: z.string().min(1),
+    body: z.string().trim().min(1).max(4_000),
+  }).parse(params);
+  return prisma.answer.create({ data: parsed });
 }
 
 /** Fetch answers not yet delivered (for the bot deliver job). */
 export async function getPendingAnswers(): Promise<Answer[]> {
   return prisma.answer.findMany({ where: { deliveredAt: null } });
+}
+
+/** Context needed by the Discord outbox worker; it intentionally has no student data. */
+export async function getAnswerDeliveryContext(answerId: string) {
+  return prisma.answer.findUnique({
+    where: { id: answerId },
+    include: {
+      concept: {
+        include: {
+          item: { include: { guild: { select: { announcementChannelId: true, discordGuildId: true } } } },
+        },
+      },
+    },
+  });
 }
 
 /** Stamp delivery — idempotent via deliveredAt check. */
@@ -21,7 +41,7 @@ export async function stampDelivered(
   deliveredCount: number,
   pinnedMessageId?: string
 ): Promise<void> {
-  await prisma.answer.update({
+  await prisma.answer.updateMany({
     where: { id: answerId, deliveredAt: null },
     data: { deliveredAt: new Date(), deliveredCount, pinnedMessageId },
   });
