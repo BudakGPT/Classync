@@ -1,0 +1,21 @@
+{
+  "name": "classync",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:bot": "npm run dev --workspace=apps/bot",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:push": "npm run db:push --workspace=packages/core",
+    "db:generate": "npm run db:generate --workspace=packages/core",
+    "db:seed": "npm run db:seed --workspace=packages/core",
+    "register": "npm run register --workspace=apps/bot"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
