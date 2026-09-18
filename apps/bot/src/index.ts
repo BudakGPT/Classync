@@ -68,11 +68,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// Auto-ingest: messageCreate in announcement channel (Late MVP / B6)
-client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot) return;
-  const { handleAutoIngest } = await import("./interactions/autoIngest");
-  await handleAutoIngest(client, message).catch(console.error);
-});
+// Auto-ingest: messageCreate in announcement channel (Late MVP / B6).
+// Disabled by default: it fires on every message and is the only feature that can fail
+// on stage. `/ta add-item` is the scripted fallback. Set ENABLE_AUTO_INGEST=true to re-enable.
+if (process.env.ENABLE_AUTO_INGEST === "true") {
+  client.on(Events.MessageCreate, async (message) => {
+    if (message.author.bot) return;
+    const { handleAutoIngest } = await import("./interactions/autoIngest");
+    await handleAutoIngest(client, message).catch(console.error);
+  });
+  console.log("📥 Auto-ingest ENABLED");
+} else {
+  console.log("📥 Auto-ingest disabled (set ENABLE_AUTO_INGEST=true to enable)");
+}
 
 await client.login(process.env.DISCORD_TOKEN);
