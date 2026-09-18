@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "../db";
 import type { Item, ItemKind } from "@prisma/client";
 
 export async function createItem(params: {

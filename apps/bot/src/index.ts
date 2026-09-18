@@ -1,5 +1,12 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, Collection, Events, MessageFlags } from "discord.js";
+import {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  Events,
+  MessageFlags,
+  type InteractionReplyOptions,
+} from "discord.js";
 import { readdirSync } from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 import { join, dirname } from "path";
@@ -34,8 +41,8 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Bot ready: ${c.user.tag}`);
 
   // Start jobs
-  const { startDeliverJob } = await import("./jobs/deliver.js");
-  const { startReminderJob } = await import("./jobs/reminders.js");
+  const { startDeliverJob } = await import("./jobs/deliver");
+  const { startReminderJob } = await import("./jobs/reminders");
   startDeliverJob(c);
   startReminderJob(c);
 });
@@ -49,7 +56,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await command.execute(interaction);
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);
-    const msg = { content: "❌ Something went wrong. Try again.", flags: MessageFlags.Ephemeral };
+    const msg: InteractionReplyOptions = {
+      content: "❌ Something went wrong. Try again.",
+      flags: MessageFlags.Ephemeral,
+    };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg);
     } else {
@@ -61,7 +71,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // Auto-ingest: messageCreate in announcement channel (Late MVP / B6)
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
-  const { handleAutoIngest } = await import("./interactions/autoIngest.js");
+  const { handleAutoIngest } = await import("./interactions/autoIngest");
   await handleAutoIngest(client, message).catch(console.error);
 });
 

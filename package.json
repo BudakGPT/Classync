@@ -10,12 +10,16 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "db:push": "npm run db:push --workspace=packages/core",
-    "db:generate": "npm run db:generate --workspace=packages/core",
-    "db:seed": "npm run db:seed --workspace=packages/core",
+    "db:push": "node --env-file=.env ./node_modules/prisma/build/index.js db push --schema=packages/core/prisma/schema.prisma",
+    "db:generate": "node --env-file=.env ./node_modules/prisma/build/index.js generate --schema=packages/core/prisma/schema.prisma",
+    "db:seed": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs packages/core/prisma/seed.ts",
     "register": "npm run register --workspace=apps/bot"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@dicebear/collection": "9.4.2",
+    "@dicebear/core": "9.4.3"
   }
 }
