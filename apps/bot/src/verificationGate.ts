@@ -61,7 +61,12 @@ export async function setupVerificationChannel(
     });
   }
 
-  // 2. Create #verifikasi channel
+  // 2. Reuse #verifikasi under that category when it exists (re-running /setup must not duplicate it)
+  const existing = guild.channels.cache.find(
+    (c): c is TextChannel => c.type === ChannelType.GuildText && c.parentId === authCategory.id && c.name === "verifikasi"
+  );
+  if (existing) return existing;
+
   const verifyChannel = await guild.channels.create({
     name: "verifikasi",
     type: ChannelType.GuildText,
