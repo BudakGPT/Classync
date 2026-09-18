@@ -69,11 +69,11 @@ export function RespondModal({ open, onClose, clusterId, initialAnswerId }: {
       size="xl"
       icon={MessageSquareReply}
       title="Respond to help request"
-      description="Write one answer — Classync delivers it privately to every student who asked."
+      description="Your answer will be pinned in the Discord room and sent via DM to explicit requesters. The room will remain open for follow-up questions."
       bodyClassName="p-0"
       footer={phase === 'compose' ? (
         <>
-          <span className="mr-auto hidden items-center gap-1.5 text-xs text-ink-3 sm:inline-flex"><Lock className="size-3.5" />{plural(n, 'private DM')} · nothing is posted in class channels</span>
+          <span className="mr-auto hidden items-center gap-1.5 text-xs text-ink-3 sm:inline-flex"><Lock className="size-3.5" />Pinned in Discord room & sent to {plural(n, 'requester')} via DM · room remains open</span>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon={Send} onClick={send}>Send Answer</Button>
         </>
