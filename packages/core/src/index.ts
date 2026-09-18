@@ -134,5 +134,9 @@ export type { ParsedRoster, RosterRoleInput } from "./services/rosterParser";
 export { getPeerMetrics } from "./services/matchMetrics";
 export type { PeerMetrics } from "./services/matchMetrics";
 
+// services/silentRisk (TA early-warning read model)
+export { getSilentRisk } from "./services/silentRisk";
+export type { SilentRiskItem, SilentRiskSummary } from "./services/silentRisk";
+
 // Re-export Prisma enum types needed by web
 export type { ItemKind, StatusState, RequestState, TopicRoomState, MatchState, RosterRole, AcademicRoster } from "@prisma/client";
