@@ -61,7 +61,7 @@ export interface Group {
   isNew?: boolean
 }
 
-export type Category = 'Assignment' | 'Quiz' | 'Lecture' | 'FGD' | 'Presentation' | 'Deadline' | 'Announcement' | 'Material' | 'Project'
+export type Category = 'Assignment' | 'Quiz' | 'Lecture' | 'FGD' | 'Presentation' | 'Deadline' | 'Announcement' | 'Material' | 'Project' | 'Reading'
 export type EventCategory = Category | 'Extra Class'
 
 export type AudienceType = 'class' | 'classes' | 'group' | 'students' | 'custom'
@@ -126,7 +126,7 @@ export interface Assignment {
   id: string
   title: string
   classId: ClassId
-  category: 'Assignment' | 'Quiz' | 'Presentation' | 'FGD' | 'Project'
+  category: 'Assignment' | 'Quiz' | 'Presentation' | 'FGD' | 'Project' | 'Reading'
   due: string // ISO
   createdAt: string
   createdBy: string
@@ -135,6 +135,7 @@ export interface Assignment {
   helpClusterIds: string[]
   notificationIds: string[]
   isNew?: boolean
+  dbItemId?: string
 }
 
 export interface HelpCluster {
@@ -150,6 +151,8 @@ export interface HelpCluster {
   answeredAt?: string
   answerId?: string
   sampleQuestion: string // anonymised representative question
+  dbConceptId?: string
+  dbGuildId?: string
 }
 
 export interface ReusableAnswer {
@@ -162,6 +165,9 @@ export interface ReusableAnswer {
   authorId: string
   updatedAt: string
   isNew?: boolean
+  dbAnswerId?: string
+  deliveredAt?: string | null
+  deliveredCount?: number
 }
 
 export type ActivityType = 'students' | 'classes' | 'groups' | 'notifications' | 'discord' | 'system' | 'assignments' | 'help'

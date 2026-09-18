@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { getDbSyncState } from '@/actions/sync'
 import { SEED } from '@/data/seed'
 import { nowIso } from '@/lib/time'
 import type { Activity, AppData, ModalSpec, Person, ToastInput } from '@/lib/types'
@@ -33,6 +34,63 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [modal, setModal] = useState<ModalSpec | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const timers = useRef(new Map<string, number>())
+
+  // Sync real state from Neon DB periodically while keeping SEED dummy baseline
+  useEffect(() => {
+    let active = true
+
+    async function sync() {
+      try {
+        const res = await getDbSyncState()
+        if (!active || !res.connected) return
+
+        setData((prev) => {
+          // Merge assignments: keep non-db seed assignments, prepend/update db assignments
+          const seedAssignments = prev.assignments.filter((a) => !a.id.startsWith('db-item-'))
+          const mergedAssignments = [...res.assignments, ...seedAssignments]
+
+          // Merge helpClusters: keep non-db seed clusters, prepend/update db clusters
+          const seedClusters = prev.helpClusters.filter((h) => !h.id.startsWith('db-concept-'))
+          const mergedClusters = [...res.helpClusters, ...seedClusters]
+
+          // Merge answers: keep non-db seed answers, prepend/update db answers
+          const seedAnswers = prev.answers.filter((a) => !a.id.startsWith('db-ans-'))
+          const mergedAnswers = [...res.answers, ...seedAnswers]
+
+          // Merge students: add any new students from DB
+          const existingIds = new Set(prev.people.map((p) => p.id))
+          const newStudents = res.students.filter((s) => !existingIds.has(s.id))
+          const mergedPeople = [...prev.people, ...newStudents]
+
+          // Sync class/server name if guild is present in DB
+          let mergedClasses = prev.classes
+          if (res.guild) {
+            mergedClasses = prev.classes.map((c) =>
+              c.id === 'A' ? { ...c, name: `${res.guild?.name} (Class A)` } : c
+            )
+          }
+
+          return {
+            ...prev,
+            classes: mergedClasses,
+            assignments: mergedAssignments,
+            helpClusters: mergedClusters,
+            answers: mergedAnswers,
+            people: mergedPeople,
+          }
+        })
+      } catch (err) {
+        console.warn('[store] DB Sync error:', err)
+      }
+    }
+
+    sync()
+    const interval = setInterval(sync, 6000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [])
 
   const update = useCallback(<K extends keyof AppData>(key: K, fn: (prev: AppData[K]) => AppData[K]) => {
     setData((d) => ({ ...d, [key]: fn(d[key]) }))

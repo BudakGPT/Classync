@@ -23,6 +23,7 @@ export const DEFAULT_DESC: Record<Category, string> = {
   Announcement: 'New announcement from your teaching team.',
   Material: 'New course material is available.',
   Project: 'A project milestone or deadline has been scheduled.',
+  Reading: 'New required reading material has been assigned.',
 }
 
 /** '1 day before' → '1 day' */

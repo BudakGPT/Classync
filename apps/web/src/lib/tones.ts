@@ -31,5 +31,6 @@ export const CATEGORY: Record<EventCategory, { icon: LucideIcon; tone: Tone; emo
   Material: { icon: BookOpen, tone: 'emerald', emoji: '📖' },
   'Extra Class': { icon: FileText, tone: 'pink', emoji: '➕' },
   Project: { icon: FolderKanban, tone: 'amber', emoji: '📁' },
+  Reading: { icon: BookOpen, tone: 'teal', emoji: '📖' },
 }
-export const CATEGORIES = ['Assignment', 'Quiz', 'Lecture', 'FGD', 'Presentation', 'Deadline', 'Announcement', 'Material', 'Project'] as const
+export const CATEGORIES = ['Assignment', 'Quiz', 'Lecture', 'FGD', 'Presentation', 'Deadline', 'Announcement', 'Material', 'Project', 'Reading'] as const

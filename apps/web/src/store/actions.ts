@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { submitAnswerAction } from '@/actions/sync'
 import { audienceIds, audienceLabel, studentsIn } from '@/lib/selectors'
 import { now, nowIso, WEEKDAYS } from '@/lib/time'
 import type {
@@ -194,6 +195,17 @@ export function useActions() {
         update('helpClusters', (hs) => hs.map((x) => (x.id === clusterId ? { ...x, status: 'answered', answeredAt: nowIso(), answerId } : x)))
         update('helpStats', (s) => ({ ...s, resolvedToday: s.resolvedToday + h.requesterIds.length }))
         log({ actorId: me.id, action: 'answered', target: h.concept, detail: `Sent privately to ${h.requesterIds.length} students${opts.saveAsReusable ? ' · saved as reusable answer' : opts.reuseAnswerId ? ' · reused answer' : ''}`, type: 'help' })
+
+        // If this concept is backed by Neon DB, write to Neon outbox for the bot to deliver to Discord!
+        const dbConceptId = h.dbConceptId ?? (clusterId.startsWith('db-concept-') ? clusterId.replace('db-concept-', '') : undefined)
+        if (dbConceptId) {
+          submitAnswerAction({
+            conceptId: dbConceptId,
+            guildId: h.dbGuildId,
+            authorUserId: me.id === 'farhan' ? '1236676777997373503' : me.id,
+            body,
+          }).catch((err) => console.error('[actions] Neon submitAnswerAction error:', err))
+        }
       },
 
       /** Anonymous difficulty report (drives the privacy-threshold demo). */
