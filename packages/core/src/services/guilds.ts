@@ -93,3 +93,28 @@ export async function isTa(
   const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
   return guild?.taUserIds.includes(discordUserId) ?? false;
 }
+
+/**
+ * Wipes all guild-related data (roster, items→concepts→answers→rooms, students)
+ * but preserves the Guild row itself (owner, TAs stay).
+ * Resets auth-related fields so a fresh /setup can recreate them.
+ */
+export async function resetGuildData(discordGuildId: string): Promise<void> {
+  const guild = await prisma.guild.findUnique({ where: { discordGuildId } });
+  if (!guild) return;
+
+  await prisma.$transaction([
+    prisma.academicRoster.deleteMany({ where: { guildId: guild.id } }),
+    prisma.item.deleteMany({ where: { guildId: guild.id } }),
+    prisma.student.deleteMany({ where: { guildId: guild.id } }),
+    prisma.guild.update({
+      where: { id: guild.id },
+      data: {
+        announcementChannelId: null,
+        authChannelId: null,
+        authEnabled: false,
+        verifiedRoleId: null,
+      },
+    }),
+  ]);
+}

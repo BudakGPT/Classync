@@ -7,7 +7,6 @@
 
 export { prisma } from "./db";
 
-// services/guilds
 export {
   getOrCreateGuild,
   setAnnouncementChannel,
@@ -19,6 +18,7 @@ export {
   getGuildById,
   getGuildsForTa,
   isTa,
+  resetGuildData,
 } from "./services/guilds";
 
 // services/items

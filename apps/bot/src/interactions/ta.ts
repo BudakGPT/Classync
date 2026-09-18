@@ -18,6 +18,8 @@ import {
   ensureItemCategory,
   reopenTopicRoomChannel,
 } from "../topicRooms.js";
+import { announceTask } from "../announcements.js";
+import { handleAnnounceAllCommand } from "./announce.js";
 
 const itemKinds = ["ASSIGNMENT", "QUIZ", "EXAM", "READING"] as const;
 
@@ -39,8 +41,19 @@ async function addItem(interaction: ChatInputCommandInteraction): Promise<void> 
   const item = await createItem({ guildId: guild.id, title: interaction.options.getString("title", true), dueAt, kind });
   await ensureItemCategory(interaction.client, guild.discordGuildId, item, guild.taUserIds).catch(() => null);
 
+  const shouldAnnounce = interaction.options.getBoolean("announce") ?? true;
+  let announceStatus = "";
+  if (shouldAnnounce) {
+    const res = await announceTask(interaction.client, guild.discordGuildId, item);
+    if (res.success) {
+      announceStatus = ` · 📢 Disiarkan ke <#${res.channelId}>`;
+    } else {
+      announceStatus = ` · ⚠️ Pengumuman dilewati: ${res.reason}`;
+    }
+  }
+
   const due = dueAt ? `<t:${Math.floor(dueAt.getTime() / 1000)}:F>` : "No due date";
-  await interaction.editReply(`Added **${item.title}** · ${kind} · ${due} and provisioned category.`);
+  await interaction.editReply(`Added **${item.title}** · ${kind} · ${due}${announceStatus} and provisioned category.`);
 }
 
 async function requesterName(interaction: ChatInputCommandInteraction, userId: string): Promise<string> {
@@ -145,7 +158,8 @@ export async function handleTaCommand(interaction: ChatInputCommandInteraction):
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const command = interaction.options.getSubcommand();
-  if (command === "add-item") await addItem(interaction);
+  if (command === "announce-all") await handleAnnounceAllCommand(interaction);
+  else if (command === "add-item") await addItem(interaction);
   else if (command === "queue") await showQueue(interaction);
   else if (command === "answer") await answer(interaction);
   else if (command === "close-room") await closeRoom(interaction);

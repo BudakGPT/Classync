@@ -7,6 +7,7 @@ import {
   Partials,
   type Interaction,
 } from "discord.js";
+import announceall from "./commands/announceall.js";
 import setup from "./commands/setup.js";
 import ta from "./commands/ta.js";
 import tasks from "./commands/tasks.js";
@@ -15,7 +16,7 @@ import { handleHelperToggle } from "./interactions/helper.js";
 import { handleMatchButton } from "./interactions/match.js";
 import { handleDirectMessage } from "./interactions/relay.js";
 import { handleReminderInteraction } from "./interactions/reminders.js";
-import { handleSetupModal } from "./interactions/setup.js";
+import { handleSetupModal, handleSetupResetButton } from "./interactions/setup.js";
 import { handleVerificationButton, handleVerificationModal } from "./interactions/verification.js";
 import { handleTaAutocomplete } from "./interactions/ta.js";
 import { handleTaskInteraction } from "./interactions/tasks.js";
@@ -28,6 +29,7 @@ const commands = new Map([
   [setup.data.name, setup],
   [tasks.data.name, tasks],
   [ta.data.name, ta],
+  [announceall.data.name, announceall],
 ]);
 
 const client = new Client({
@@ -73,6 +75,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (interaction.isButton()) {
       const prefix = interaction.customId.split(":")[0];
+      if (prefix === "setup") return void await handleSetupResetButton(interaction);
       if (prefix === "auth") return void await handleVerificationButton(interaction);
       if (prefix === "match") return void await handleMatchButton(interaction);
       if (prefix === "helper") return void await handleHelperToggle(interaction);

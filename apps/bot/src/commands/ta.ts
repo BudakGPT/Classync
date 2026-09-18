@@ -10,7 +10,9 @@ export default {
       .addStringOption((option) => option.setName("due").setDescription("YYYY-MM-DD or YYYY-MM-DD HH:mm (Jakarta)"))
       .addStringOption((option) => option.setName("kind").setDescription("Task type").addChoices(
         { name: "Assignment", value: "ASSIGNMENT" }, { name: "Quiz", value: "QUIZ" },
-        { name: "Exam", value: "EXAM" }, { name: "Reading", value: "READING" })))
+        { name: "Exam", value: "EXAM" }, { name: "Reading", value: "READING" }))
+      .addBooleanOption((option) => option.setName("announce").setDescription("Kirim pengumuman otomatis ke channel pengumuman (default: true)")))
+    .addSubcommand((sub) => sub.setName("announce-all").setDescription("Kirim ringkasan seluruh tugas aktif ke channel pengumuman"))
     .addSubcommand((sub) => sub.setName("queue").setDescription("View TA-help requests and discussion rooms"))
     .addSubcommand((sub) => sub.setName("answer").setDescription("Answer a concept")
       .addStringOption((option) => option.setName("concept").setDescription("Concept").setRequired(true).setAutocomplete(true))
