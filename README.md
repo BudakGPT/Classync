@@ -103,29 +103,42 @@ Classync flips this: help-seeking is **private by default**, and information onl
 
 ## Architecture
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                        Discord Ecosystem                         │
-│                                                                   │
-│   🎓 Students ◄──── Slash Commands / DMs ────► 🤖 Classync Bot  │
-│   🧑‍🏫 TAs     ◄──── Admin Commands ───────────►    (discord.js) │
-└───────────────────────────────────┬───────────────────────────────┘
-                                    │
-                         @classync/core (shared)
-                                    │
-┌───────────────────────────────────┴───────────────────────────────┐
-│                        Web Dashboard                              │
-│                                                                   │
-│   💻 TA Browser ◄──── Auth.js (Discord OAuth) ──► ⚡ Next.js 15 │
-│                        Server Actions & RSC                       │
-└───────────────────────────────────┬───────────────────────────────┘
-                                    │
-                              Prisma ORM 6
-                                    │
-                          ┌─────────┴──────────┐
-                          │  🐘 PostgreSQL     │
-                          │     (Neon Cloud)    │
-                          └────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Discord["Discord"]
+        Student["Student"]
+        TA_D["Teaching Assistant"]
+        Bot["Classync Bot\n(discord.js v14)"]
+    end
+
+    subgraph Web["Web Dashboard"]
+        TA_W["TA Browser"]
+        Next["Next.js 15\nApp Router"]
+        Auth["Auth.js v5\nDiscord OAuth"]
+    end
+
+    subgraph Core["@classync/core"]
+        Services["Domain Services\nMatches · Concepts · Roster\nItems · Answers · SilentRisk"]
+        Prisma["Prisma ORM 6"]
+        LLM["LLM Client\nRoster Parsing"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        DB[("PostgreSQL\n(Neon)")]
+        OR["OpenRouter API"]
+    end
+
+    Student -- "Slash Commands\n/tasks · /announceall" --> Bot
+    TA_D -- "Admin Commands\n/setup · /ta" --> Bot
+    Bot -- "DM Relay\nEmbeds · Buttons" --> Student
+
+    TA_W --> Auth --> Next
+
+    Bot <--> Services
+    Next <--> Services
+    Services <--> Prisma
+    Prisma <--> DB
+    LLM -. "Masked headers\n& cell patterns" .-> OR
 ```
 
 The monorepo has three workspaces sharing one database through `@classync/core`:
